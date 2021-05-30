@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Queue.h>
+#include <AK/StringBuilder.h>
 #include <AK/StringView.h>
 #include <AK/Types.h>
 #include <AK/Utf8View.h>
@@ -127,6 +128,7 @@ private:
     bool consume_next_if_match(const StringView&, CaseSensitivity = CaseSensitivity::CaseSensitive);
     void create_new_token(HTMLToken::Type);
     bool current_end_tag_token_is_appropriate() const;
+    String consume_current_builder();
 
     static const char* state_name(State state)
     {
@@ -163,8 +165,9 @@ private:
     Utf8CodepointIterator m_prev_utf8_iterator;
 
     HTMLToken m_current_token;
+    StringBuilder m_current_builder;
 
-    HTMLToken m_last_emitted_start_tag;
+    Optional<String> m_last_emitted_start_tag_name;
 
     bool m_has_emitted_eof { false };
 

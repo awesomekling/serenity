@@ -8,7 +8,6 @@
 
 #include <AK/FlyString.h>
 #include <AK/String.h>
-#include <AK/StringBuilder.h>
 #include <AK/Types.h>
 #include <AK/Utf8View.h>
 #include <AK/Vector.h>
@@ -34,7 +33,10 @@ public:
     {
         HTMLToken token;
         token.m_type = Type::Character;
-        token.m_comment_or_character.data.append(code_point);
+        StringBuilder builder;
+        // FIXME: This narrows code_point to char, should this be append_code_point() instead?
+        builder.append(code_point);
+        token.m_comment_or_character.data = builder.to_string();
         return token;
     }
 
@@ -42,7 +44,7 @@ public:
     {
         HTMLToken token;
         token.m_type = Type::StartTag;
-        token.m_tag.tag_name.append(tag_name);
+        token.m_tag.tag_name = tag_name;
         return token;
     }
 
@@ -56,7 +58,7 @@ public:
     u32 code_point() const
     {
         VERIFY(is_character());
-        Utf8View view(m_comment_or_character.data.string_view());
+        Utf8View view(m_comment_or_character.data);
         VERIFY(view.length() == 1);
         return *view.begin();
     }
@@ -81,7 +83,7 @@ public:
     String tag_name() const
     {
         VERIFY(is_start_tag() || is_end_tag());
-        return m_tag.tag_name.to_string();
+        return m_tag.tag_name;
     }
 
     bool is_self_closing() const
@@ -106,8 +108,8 @@ public:
     {
         VERIFY(is_start_tag() || is_end_tag());
         for (auto& attribute : m_tag.attributes) {
-            if (attribute_name == attribute.local_name_builder.string_view())
-                return attribute.value_builder.string_view();
+            if (attribute_name == attribute.local_name)
+                return attribute.value;
         }
         return {};
     }
@@ -120,19 +122,16 @@ public:
     void adjust_tag_name(const FlyString& old_name, const FlyString& new_name)
     {
         VERIFY(is_start_tag() || is_end_tag());
-        if (old_name == m_tag.tag_name.string_view()) {
-            m_tag.tag_name.clear();
-            m_tag.tag_name.append(new_name);
-        }
+        if (old_name == m_tag.tag_name)
+            m_tag.tag_name = new_name;
     }
 
     void adjust_attribute_name(const FlyString& old_name, const FlyString& new_name)
     {
         VERIFY(is_start_tag() || is_end_tag());
         for (auto& attribute : m_tag.attributes) {
-            if (old_name == attribute.local_name_builder.string_view()) {
-                attribute.local_name_builder.clear();
-                attribute.local_name_builder.append(new_name);
+            if (old_name == attribute.local_name) {
+                attribute.local_name = new_name;
             }
         }
     }
@@ -141,15 +140,10 @@ public:
     {
         VERIFY(is_start_tag() || is_end_tag());
         for (auto& attribute : m_tag.attributes) {
-            if (old_name == attribute.local_name_builder.string_view()) {
-                attribute.prefix_builder.clear();
-                attribute.prefix_builder.append(prefix);
-
-                attribute.local_name_builder.clear();
-                attribute.local_name_builder.append(local_name);
-
-                attribute.namespace_builder.clear();
-                attribute.namespace_builder.append(namespace_);
+            if (old_name == attribute.local_name) {
+                attribute.prefix = prefix;
+                attribute.local_name = local_name;
+                attribute.namespace_ = namespace_;
             }
         }
     }
@@ -180,10 +174,10 @@ private:
     };
 
     struct AttributeBuilder {
-        StringBuilder prefix_builder;
-        StringBuilder local_name_builder;
-        StringBuilder namespace_builder;
-        StringBuilder value_builder;
+        String prefix;
+        String local_name;
+        String namespace_;
+        String value;
         Position name_start_position;
         Position value_start_position;
         Position name_end_position;
@@ -196,11 +190,11 @@ private:
     struct {
         // NOTE: "Missing" is a distinct state from the empty string.
 
-        StringBuilder name;
+        String name;
         bool missing_name { true };
-        StringBuilder public_identifier;
+        String public_identifier;
         bool missing_public_identifier { true };
-        StringBuilder system_identifier;
+        String system_identifier;
         bool missing_system_identifier { true };
         bool force_quirks { false };
     } m_doctype;
@@ -208,7 +202,7 @@ private:
     // Type::StartTag
     // Type::EndTag
     struct {
-        StringBuilder tag_name;
+        String tag_name;
         bool self_closing { false };
         bool self_closing_acknowledged { false };
         Vector<AttributeBuilder> attributes;
@@ -217,7 +211,7 @@ private:
     // Type::Comment
     // Type::Character
     struct {
-        StringBuilder data;
+        String data;
     } m_comment_or_character;
 
     Position m_start_position;

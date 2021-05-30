@@ -262,11 +262,11 @@ DOM::QuirksMode HTMLDocumentParser::which_quirks_mode(const HTMLToken& doctype_t
         return DOM::QuirksMode::Yes;
 
     // NOTE: The tokenizer puts the name into lower case for us.
-    if (doctype_token.m_doctype.name.to_string() != "html")
+    if (doctype_token.m_doctype.name != "html")
         return DOM::QuirksMode::Yes;
 
-    auto public_identifier = doctype_token.m_doctype.public_identifier.to_string();
-    auto system_identifier = doctype_token.m_doctype.system_identifier.to_string();
+    auto const& public_identifier = doctype_token.m_doctype.public_identifier;
+    auto const& system_identifier = doctype_token.m_doctype.system_identifier;
 
     if (public_identifier.equals_ignoring_case("-//W3O//DTD W3 HTML Strict 3.0//EN//"))
         return DOM::QuirksMode::Yes;
@@ -317,16 +317,16 @@ void HTMLDocumentParser::handle_initial(HTMLToken& token)
     }
 
     if (token.is_comment()) {
-        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data.to_string()));
+        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data));
         document().append_child(move(comment));
         return;
     }
 
     if (token.is_doctype()) {
         auto doctype = adopt_ref(*new DOM::DocumentType(document()));
-        doctype->set_name(token.m_doctype.name.to_string());
-        doctype->set_public_id(token.m_doctype.public_identifier.to_string());
-        doctype->set_system_id(token.m_doctype.system_identifier.to_string());
+        doctype->set_name(token.m_doctype.name);
+        doctype->set_public_id(token.m_doctype.public_identifier);
+        doctype->set_system_id(token.m_doctype.system_identifier);
         document().append_child(move(doctype));
         document().set_quirks_mode(which_quirks_mode(token));
         m_insertion_mode = InsertionMode::BeforeHTML;
@@ -347,7 +347,7 @@ void HTMLDocumentParser::handle_before_html(HTMLToken& token)
     }
 
     if (token.is_comment()) {
-        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data.to_string()));
+        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data));
         document().append_child(move(comment));
         return;
     }
@@ -437,7 +437,7 @@ NonnullRefPtr<DOM::Element> HTMLDocumentParser::create_element_for(const HTMLTok
 {
     auto element = create_element(document(), token.tag_name(), namespace_);
     for (auto& attribute : token.m_tag.attributes) {
-        element->set_attribute(attribute.local_name_builder.to_string(), attribute.value_builder.to_string());
+        element->set_attribute(attribute.local_name, attribute.value);
     }
     return element;
 }
@@ -520,7 +520,7 @@ AnythingElse:
 
 void HTMLDocumentParser::insert_comment(HTMLToken& token)
 {
-    auto data = token.m_comment_or_character.data.to_string();
+    auto data = token.m_comment_or_character.data;
     auto adjusted_insertion_location = find_appropriate_place_for_inserting_node();
     adjusted_insertion_location.parent->insert_before(adopt_ref(*new DOM::Comment(document(), data)), adjusted_insertion_location.insert_before_sibling);
 }
@@ -832,7 +832,7 @@ void HTMLDocumentParser::handle_after_body(HTMLToken& token)
     }
 
     if (token.is_comment()) {
-        auto data = token.m_comment_or_character.data.to_string();
+        auto data = token.m_comment_or_character.data;
         auto& insertion_location = m_stack_of_open_elements.first();
         insertion_location.append_child(adopt_ref(*new DOM::Comment(document(), data)));
         return;
@@ -870,7 +870,7 @@ void HTMLDocumentParser::handle_after_body(HTMLToken& token)
 void HTMLDocumentParser::handle_after_after_body(HTMLToken& token)
 {
     if (token.is_comment()) {
-        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data.to_string()));
+        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data));
         document().append_child(move(comment));
         return;
     }
@@ -1120,9 +1120,9 @@ void HTMLDocumentParser::handle_in_body(HTMLToken& token)
         if (m_stack_of_open_elements.contains(HTML::TagNames::template_))
             return;
         for (auto& attribute : token.m_tag.attributes) {
-            if (current_node().has_attribute(attribute.local_name_builder.string_view()))
+            if (current_node().has_attribute(attribute.local_name))
                 continue;
-            current_node().set_attribute(attribute.local_name_builder.to_string(), attribute.value_builder.to_string());
+            current_node().set_attribute(attribute.local_name, attribute.value);
         }
         return;
     }
@@ -1147,9 +1147,9 @@ void HTMLDocumentParser::handle_in_body(HTMLToken& token)
         m_frameset_ok = false;
         auto& body_element = m_stack_of_open_elements.elements().at(1);
         for (auto& attribute : token.m_tag.attributes) {
-            if (body_element.has_attribute(attribute.local_name_builder.string_view()))
+            if (body_element.has_attribute(attribute.local_name))
                 continue;
-            body_element.set_attribute(attribute.local_name_builder.to_string(), attribute.value_builder.to_string());
+            body_element.set_attribute(attribute.local_name, attribute.value);
         }
         return;
     }
@@ -1572,8 +1572,7 @@ void HTMLDocumentParser::handle_in_body(HTMLToken& token)
     if (token.is_start_tag() && token.tag_name() == HTML::TagNames::image) {
         // Parse error. Change the token's tag name to HTML::TagNames::img and reprocess it. (Don't ask.)
         log_parse_error();
-        token.m_tag.tag_name.clear();
-        token.m_tag.tag_name.append(HTML::TagNames::img);
+        token.m_tag.tag_name = "img";
         process_using_the_rules_for(m_insertion_mode, token);
         return;
     }
@@ -2752,7 +2751,7 @@ void HTMLDocumentParser::handle_after_frameset(HTMLToken& token)
 void HTMLDocumentParser::handle_after_after_frameset(HTMLToken& token)
 {
     if (token.is_comment()) {
-        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data.to_string()));
+        auto comment = adopt_ref(*new DOM::Comment(document(), token.m_comment_or_character.data));
         document().append_child(move(comment));
         return;
     }
