@@ -7,6 +7,7 @@
 
 #include <AK/GenericLexer.h>
 #include <AK/HashMap.h>
+#include <AK/NonnullOwnPtr.h>
 #include <AK/SourceLocation.h>
 #include <LibWeb/CSS/CSSImportRule.h>
 #include <LibWeb/CSS/CSSRule.h>
@@ -280,25 +281,33 @@ static StringView isolate_calc_expression(const StringView& value)
     return value.substring_view(5, substring_length);
 }
 
-static CSS::CalculatedStyleValue::CalcSum parse_calc_expression(const StringView& expression_string)
+struct CalcToken {
+    enum class Type {
+        Undefined,
+        Number,
+        Unit,
+        Whitespace,
+        Plus,
+        Minus,
+        Asterisk,
+        Slash,
+        OpenBracket,
+        CloseBracket,
+    } type { Type::Undefined };
+    String value {};
+};
+
+static void eat_white_space(Vector<CalcToken>&);
+static Optional<CSS::CalculatedStyleValue::CalcValue> parse_calc_value(Vector<CalcToken>&);
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcProductPartWithOperator>> parse_calc_product_part_with_operator(Vector<CalcToken>&);
+static Optional<CSS::CalculatedStyleValue::CalcNumberValue> parse_calc_number_value(Vector<CalcToken>&);
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcProduct>> parse_calc_product(Vector<CalcToken>&);
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcSumPartWithOperator>> parse_calc_sum_part_with_operator(Vector<CalcToken>&);
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcSum>> parse_calc_sum(Vector<CalcToken>&);
+
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcSum>> parse_calc_expression(const StringView& expression_string)
 {
     // First, tokenize
-
-    struct CalcToken {
-        enum class Type {
-            Undefined,
-            Number,
-            Unit,
-            Whitespace,
-            Plus,
-            Minus,
-            Asterisk,
-            Slash,
-            OpenBracket,
-            CloseBracket,
-        } type { Type::Undefined };
-        String value {};
-    };
 
     Vector<CalcToken> tokens;
 
@@ -367,7 +376,158 @@ static CSS::CalculatedStyleValue::CalcSum parse_calc_expression(const StringView
         VERIFY_NOT_REACHED();
     }
 
-    return {};
+    // Then, parse
+
+    return parse_calc_sum(tokens);
+}
+
+static void eat_white_space(Vector<CalcToken>& tokens)
+{
+    while (tokens.size() > 0 && tokens.first().type == CalcToken::Type::Whitespace)
+        tokens.take_first();
+}
+
+static Optional<CSS::CalculatedStyleValue::CalcValue> parse_calc_value(Vector<CalcToken>& tokens)
+{
+    auto current_token = tokens.take_first();
+
+    if (current_token.type == CalcToken::Type::OpenBracket) {
+        auto parsed_calc_sum = parse_calc_sum(tokens);
+        if (!parsed_calc_sum.has_value())
+            return {};
+        return (CSS::CalculatedStyleValue::CalcValue) { parsed_calc_sum.release_value() };
+    }
+
+    if (current_token.type != CalcToken::Type::Number)
+        return {};
+
+    auto try_the_number = try_parse_float(current_token.value);
+    if (!try_the_number.has_value())
+        return {};
+
+    float the_number = try_the_number.value();
+
+    if (tokens.first().type != CalcToken::Type::Unit)
+        return (CSS::CalculatedStyleValue::CalcValue) { the_number };
+
+    auto type = length_type_from_unit(tokens.take_first().value);
+
+    if (type == CSS::Length::Type::Undefined)
+        return {};
+
+    return (CSS::CalculatedStyleValue::CalcValue) { CSS::Length(the_number, type) };
+}
+
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcProductPartWithOperator>> parse_calc_product_part_with_operator(Vector<CalcToken>& tokens)
+{
+    auto product_with_operator = make<CSS::CalculatedStyleValue::CalcProductPartWithOperator>();
+
+    eat_white_space(tokens);
+
+    auto op = tokens.first();
+    if (op.type == CalcToken::Type::Asterisk) {
+        tokens.take_first();
+        eat_white_space(tokens);
+        product_with_operator->op = CSS::CalculatedStyleValue::CalcProductPartWithOperator::Multiply;
+        auto parsed_calc_value = parse_calc_value(tokens);
+        if (!parsed_calc_value.has_value())
+            return {};
+        product_with_operator->value = { parsed_calc_value.release_value() };
+
+    } else if (op.type == CalcToken::Type::Slash) {
+        tokens.take_first();
+        eat_white_space(tokens);
+        product_with_operator->op = CSS::CalculatedStyleValue::CalcProductPartWithOperator::Divide;
+        auto parsed_calc_number_value = parse_calc_number_value(tokens);
+        if (!parsed_calc_number_value.has_value())
+            return {};
+        product_with_operator->value = { parsed_calc_number_value.release_value() };
+    } else {
+        return {};
+    }
+
+    return product_with_operator;
+}
+
+static Optional<CSS::CalculatedStyleValue::CalcNumberValue> parse_calc_number_value(Vector<CalcToken>& tokens)
+{
+    if (tokens.first().type == CalcToken::Type::OpenBracket)
+        TODO();
+
+    if (tokens.first().type != CalcToken::Type::Number)
+        return {};
+
+    auto the_number_string = tokens.take_first().value;
+    auto try_the_number = try_parse_float(the_number_string);
+    if (!try_the_number.has_value())
+        return {};
+    return try_the_number.value();
+}
+
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcProduct>> parse_calc_product(Vector<CalcToken>& tokens)
+{
+    auto calc_product = make<CSS::CalculatedStyleValue::CalcProduct>();
+
+    auto first_calc_value_or_error = parse_calc_value(tokens);
+    if (!first_calc_value_or_error.has_value())
+        return {};
+    calc_product->first_calc_value = first_calc_value_or_error.release_value();
+
+    while (tokens.size() > 0) {
+        auto product_with_operator = parse_calc_product_part_with_operator(tokens);
+        if (!product_with_operator.has_value())
+            break;
+        calc_product->zero_or_more_additional_calc_values.append(product_with_operator.release_value());
+    }
+
+    return calc_product;
+}
+
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcSumPartWithOperator>> parse_calc_sum_part_with_operator(Vector<CalcToken>& tokens)
+{
+    // The following has to have the shape of <Whitespace><+ or -><Whitespace>
+    // But the first whitespace gets eaten in parse_calc_product_part_with_operator().
+    if (tokens.size() < 3)
+        return {};
+    if (!((tokens[0].type == CalcToken::Type::Plus
+              || tokens[0].type == CalcToken::Type::Minus)
+            && tokens[1].type == CalcToken::Type::Whitespace))
+        return {};
+
+    auto op_token = tokens.take_first().type;
+    tokens.take_first(); // Whitespace;
+
+    CSS::CalculatedStyleValue::CalcSumPartWithOperator::Operation op;
+    if (op_token == CalcToken::Type::Plus)
+        op = CSS::CalculatedStyleValue::CalcSumPartWithOperator::Operation::Add;
+    else if (op_token == CalcToken::Type::Minus)
+        op = CSS::CalculatedStyleValue::CalcSumPartWithOperator::Operation::Subtract;
+    else
+        return {};
+
+    auto calc_product = parse_calc_product(tokens);
+    if (!calc_product.has_value())
+        return {};
+    return make<CSS::CalculatedStyleValue::CalcSumPartWithOperator>(op, calc_product.release_value());
+};
+
+static Optional<NonnullOwnPtr<CSS::CalculatedStyleValue::CalcSum>> parse_calc_sum(Vector<CalcToken>& tokens)
+{
+    auto parsed_calc_product = parse_calc_product(tokens);
+    if (!parsed_calc_product.has_value())
+        return {};
+
+    NonnullOwnPtrVector<CSS::CalculatedStyleValue::CalcSumPartWithOperator> additional {};
+    while (tokens.size() > 0 && tokens.first().type != CalcToken::Type::CloseBracket) {
+        auto calc_sum_part = parse_calc_sum_part_with_operator(tokens);
+        if (!calc_sum_part.has_value())
+            return {};
+        additional.append(calc_sum_part.release_value());
+    }
+
+    eat_white_space(tokens);
+
+    return make<CSS::CalculatedStyleValue::CalcSum>(parsed_calc_product.release_value(), move(additional));
 }
 
 RefPtr<CSS::StyleValue> parse_css_value(const CSS::ParsingContext& context, const StringView& string, CSS::PropertyID property_id)
@@ -402,7 +562,7 @@ RefPtr<CSS::StyleValue> parse_css_value(const CSS::ParsingContext& context, cons
         auto calc_expression_string = isolate_calc_expression(string);
         auto calc_expression = parse_calc_expression(calc_expression_string);
         if (calc_expression.has_value())
-            return CSS::CalculatedStyleValue::create(calc_expression_string, calc_expression.value());
+            return CSS::CalculatedStyleValue::create(calc_expression_string, calc_expression.release_value());
     }
 
     auto value_id = CSS::value_id_from_string(string);
