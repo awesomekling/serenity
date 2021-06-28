@@ -41,7 +41,7 @@ u32 Emulator::virt_syscall(u32 function, u32 arg1, u32 arg2, u32 arg3)
     case SC_get_stack_bounds:
         return virt$get_stack_bounds(arg1, arg2);
     case SC_access:
-        return virt$access(arg1, arg2, arg3);
+        return virt$access(arg1);
     case SC_waitid:
         return virt$waitid(arg1);
     case SC_getcwd:
@@ -113,11 +113,11 @@ u32 Emulator::virt_syscall(u32 function, u32 arg1, u32 arg2, u32 arg3)
     case SC_fstat:
         return virt$fstat(arg1, arg2);
     case SC_mkdir:
-        return virt$mkdir(arg1, arg2, arg3);
+        return virt$mkdir(arg1);
     case SC_rmdir:
         return virt$rmdir(arg1, arg2);
     case SC_unlink:
-        return virt$unlink(arg1, arg2);
+        return virt$unlink(arg1);
     case SC_symlink:
         return virt$symlink(arg1);
     case SC_rename:
@@ -163,7 +163,7 @@ u32 Emulator::virt_syscall(u32 function, u32 arg1, u32 arg2, u32 arg3)
     case SC_dbgputch:
         return virt$dbgputch(arg1);
     case SC_chmod:
-        return virt$chmod(arg1, arg2, arg3);
+        return virt$chmod(arg1);
     case SC_fchmod:
         return virt$fchmod(arg1, arg2);
     case SC_fchown:
@@ -305,10 +305,15 @@ int Emulator::virt$close(int fd)
     return syscall(SC_close, fd);
 }
 
-int Emulator::virt$mkdir(FlatPtr path, size_t path_length, mode_t mode)
+int Emulator::virt$mkdir(FlatPtr params_addr)
 {
-    auto buffer = mmu().copy_buffer_from_vm(path, path_length);
-    return syscall(SC_mkdir, buffer.data(), buffer.size(), mode);
+    Syscall::SC_mkdir_params params;
+    mmu().copy_from_vm(&params, params_addr, sizeof(params));
+
+    auto path = mmu().copy_buffer_from_vm((FlatPtr)params.path.characters, params.path.length);
+    params.path.characters = (const char*)path.data();
+    params.path.length = path.size();
+    return syscall(SC_mkdir, &params);
 }
 
 int Emulator::virt$rmdir(FlatPtr path, size_t path_length)
@@ -317,10 +322,15 @@ int Emulator::virt$rmdir(FlatPtr path, size_t path_length)
     return syscall(SC_rmdir, buffer.data(), buffer.size());
 }
 
-int Emulator::virt$unlink(FlatPtr path, size_t path_length)
+int Emulator::virt$unlink(FlatPtr params_addr)
 {
-    auto buffer = mmu().copy_buffer_from_vm(path, path_length);
-    return syscall(SC_unlink, buffer.data(), buffer.size());
+    Syscall::SC_unlink_params params;
+    mmu().copy_from_vm(&params, params_addr, sizeof(params));
+
+    auto path = mmu().copy_buffer_from_vm((FlatPtr)params.path.characters, params.path.length);
+    params.path.characters = (const char*)path.data();
+    params.path.length = path.size();
+    return syscall(SC_unlink, &params);
 }
 
 int Emulator::virt$symlink(FlatPtr params_addr)
@@ -378,10 +388,14 @@ int Emulator::virt$dbgputstr(FlatPtr characters, int length)
     return 0;
 }
 
-int Emulator::virt$chmod(FlatPtr path_addr, size_t path_length, mode_t mode)
+int Emulator::virt$chmod(FlatPtr params_addr)
 {
-    auto path = mmu().copy_buffer_from_vm(path_addr, path_length);
-    return syscall(SC_chmod, path.data(), path.size(), mode);
+    Syscall::SC_chmod_params params;
+    mmu().copy_from_vm(&params, params_addr, sizeof(params));
+    auto path = mmu().copy_buffer_from_vm((FlatPtr)params.path.characters, params.path.length);
+    params.path.characters = (const char*)path.data();
+    params.path.length = path.size();
+    return syscall(SC_chmod, &params);
 }
 
 int Emulator::virt$chown(FlatPtr params_addr)
@@ -1194,7 +1208,7 @@ int Emulator::virt$stat(FlatPtr params_addr)
     auto path = String::copy(mmu().copy_buffer_from_vm((FlatPtr)params.path.characters, params.path.length));
     struct stat host_statbuf;
     int rc;
-    if (params.follow_symlinks)
+    if (params.flags & AT_SYMLINK_NOFOLLOW)
         rc = stat(path.characters(), &host_statbuf);
     else
         rc = lstat(path.characters(), &host_statbuf);
@@ -1334,10 +1348,15 @@ int Emulator::virt$getsid(pid_t pid)
     return syscall(SC_getsid, pid);
 }
 
-int Emulator::virt$access(FlatPtr path, size_t path_length, int type)
+int Emulator::virt$access(FlatPtr params_addr)
 {
-    auto host_path = mmu().copy_buffer_from_vm(path, path_length);
-    return syscall(SC_access, host_path.data(), host_path.size(), type);
+    Syscall::SC_access_params params;
+    mmu().copy_from_vm(&params, params_addr, sizeof(params));
+
+    auto path = mmu().copy_buffer_from_vm((FlatPtr)params.path.characters, params.path.length);
+    params.path.characters = (const char*)path.data();
+    params.path.length = path.size();
+    return syscall(SC_access, &path);
 }
 
 int Emulator::virt$waitid(FlatPtr params_addr)

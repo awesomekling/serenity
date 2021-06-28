@@ -99,7 +99,7 @@ private:
     int virt$emuctl(FlatPtr, FlatPtr, FlatPtr);
     int virt$fork();
     int virt$execve(FlatPtr);
-    int virt$access(FlatPtr, size_t, int);
+    int virt$access(FlatPtr);
     int virt$sigaction(int, FlatPtr, FlatPtr);
     int virt$sigreturn();
     int virt$get_dir_entries(int fd, FlatPtr buffer, ssize_t);
@@ -132,9 +132,9 @@ private:
     u32 virt$open(u32);
     int virt$pipe(FlatPtr pipefd, int flags);
     int virt$close(int);
-    int virt$mkdir(FlatPtr path, size_t path_length, mode_t mode);
+    int virt$mkdir(FlatPtr);
     int virt$rmdir(FlatPtr path, size_t path_length);
-    int virt$unlink(FlatPtr path, size_t path_length);
+    int virt$unlink(FlatPtr);
     int virt$symlink(FlatPtr address);
     int virt$rename(FlatPtr address);
     int virt$set_coredump_metadata(FlatPtr address);
@@ -146,7 +146,7 @@ private:
     int virt$clock_nanosleep(FlatPtr);
     int virt$dbgputstr(FlatPtr characters, int length);
     int virt$dbgputch(char);
-    int virt$chmod(FlatPtr, size_t, mode_t);
+    int virt$chmod(FlatPtr);
     int virt$fchmod(int, mode_t);
     int virt$chown(FlatPtr);
     int virt$fchown(int, uid_t, gid_t);

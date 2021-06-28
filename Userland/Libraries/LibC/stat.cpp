@@ -22,21 +22,34 @@ mode_t umask(mode_t mask)
 
 int mkdir(const char* pathname, mode_t mode)
 {
-    if (!pathname) {
-        errno = EFAULT;
-        return -1;
-    }
-    int rc = syscall(SC_mkdir, pathname, strlen(pathname), mode);
-    __RETURN_WITH_ERRNO(rc, rc, -1);
+    return mkdirat(AT_FDCWD, pathname, mode);
 }
 
-int chmod(const char* pathname, mode_t mode)
+int mkdirat(int dirfd, const char* pathname, mode_t mode)
 {
     if (!pathname) {
         errno = EFAULT;
         return -1;
     }
-    int rc = syscall(SC_chmod, pathname, strlen(pathname), mode);
+    Syscall::SC_mkdir_params params { dirfd, { pathname, strlen(pathname) }, mode };
+    int rc = syscall(SC_mkdir, &params);
+    __RETURN_WITH_ERRNO(rc, rc, -1);
+}
+
+int chmod(const char* pathname, mode_t mode)
+{
+    return fchmodat(AT_FDCWD, pathname, mode, 0);
+}
+
+int fchmodat(int dirfd, const char* pathname, mode_t mode, int flags)
+{
+    if (!pathname) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    Syscall::SC_chmod_params params { dirfd, { pathname, strlen(pathname) }, mode, flags };
+    int rc = syscall(SC_chmod, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
 
@@ -51,25 +64,25 @@ int mkfifo(const char* pathname, mode_t mode)
     return mknod(pathname, mode | S_IFIFO, 0);
 }
 
-static int do_stat(int dirfd, const char* path, struct stat* statbuf, bool follow_symlinks)
+static int do_stat(int dirfd, const char* path, struct stat* statbuf, int flags)
 {
     if (!path) {
         errno = EFAULT;
         return -1;
     }
-    Syscall::SC_stat_params params { dirfd, { path, strlen(path) }, statbuf, follow_symlinks };
+    Syscall::SC_stat_params params { dirfd, { path, strlen(path) }, statbuf, flags };
     int rc = syscall(SC_stat, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
 
 int lstat(const char* path, struct stat* statbuf)
 {
-    return do_stat(AT_FDCWD, path, statbuf, false);
+    return do_stat(AT_FDCWD, path, statbuf, AT_SYMLINK_NOFOLLOW);
 }
 
 int stat(const char* path, struct stat* statbuf)
 {
-    return do_stat(AT_FDCWD, path, statbuf, true);
+    return do_stat(AT_FDCWD, path, statbuf, 0);
 }
 
 int fstat(int fd, struct stat* statbuf)
@@ -80,6 +93,6 @@ int fstat(int fd, struct stat* statbuf)
 
 int fstatat(int fd, const char* path, struct stat* statbuf, int flags)
 {
-    return do_stat(fd, path, statbuf, !(flags & AT_SYMLINK_NOFOLLOW));
+    return do_stat(fd, path, statbuf, flags);
 }
 }

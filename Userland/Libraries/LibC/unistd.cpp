@@ -39,18 +39,28 @@ static int s_cached_pid = 0;
 
 int chown(const char* pathname, uid_t uid, gid_t gid)
 {
-    if (!pathname) {
-        errno = EFAULT;
-        return -1;
-    }
-    Syscall::SC_chown_params params { { pathname, strlen(pathname) }, uid, gid };
-    int rc = syscall(SC_chown, &params);
-    __RETURN_WITH_ERRNO(rc, rc, -1);
+    return fchownat(AT_FDCWD, pathname, uid, gid, 0);
 }
 
 int fchown(int fd, uid_t uid, gid_t gid)
 {
     int rc = syscall(SC_fchown, fd, uid, gid);
+    __RETURN_WITH_ERRNO(rc, rc, -1);
+}
+
+int lchown(const char* pathname, uid_t uid, gid_t gid)
+{
+    return fchownat(AT_FDCWD, pathname, uid, gid, AT_SYMLINK_NOFOLLOW);
+}
+
+int fchownat(int dirfd, const char* pathname, uid_t uid, gid_t gid, int flags)
+{
+    if (!pathname) {
+        errno = EFAULT;
+        return -1;
+    }
+    Syscall::SC_chown_params params { dirfd, { pathname, strlen(pathname) }, uid, gid, flags };
+    int rc = syscall(SC_chown, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
 
@@ -457,7 +467,12 @@ int sethostname(const char* hostname, ssize_t size)
 
 ssize_t readlink(const char* path, char* buffer, size_t size)
 {
-    Syscall::SC_readlink_params params { { path, strlen(path) }, { buffer, size } };
+    return readlinkat(AT_FDCWD, path, buffer, size);
+}
+
+ssize_t readlinkat(int dirfd, const char* path, char* buffer, size_t size)
+{
+    Syscall::SC_readlink_params params { dirfd, { path, strlen(path) }, { buffer, size } };
     int rc = syscall(SC_readlink, &params);
     // Return the number of bytes placed in the buffer, not the full path size.
     __RETURN_WITH_ERRNO(rc, min((size_t)rc, size), -1);
@@ -471,28 +486,44 @@ off_t lseek(int fd, off_t offset, int whence)
 
 int link(const char* old_path, const char* new_path)
 {
+    return linkat(AT_FDCWD, old_path, AT_FDCWD, new_path, 0);
+}
+
+int linkat(int old_dirfd, const char* old_path, int new_dirfd, const char* new_path, int flags)
+{
     if (!old_path || !new_path) {
         errno = EFAULT;
         return -1;
     }
-    Syscall::SC_link_params params { { old_path, strlen(old_path) }, { new_path, strlen(new_path) } };
+    Syscall::SC_link_params params { old_dirfd, { old_path, strlen(old_path) }, new_dirfd, { new_path, strlen(new_path) }, flags };
     int rc = syscall(SC_link, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
 
 int unlink(const char* pathname)
 {
-    int rc = syscall(SC_unlink, pathname, strlen(pathname));
+    return unlinkat(AT_FDCWD, pathname, 0);
+}
+
+int unlinkat(int dirfd, const char* pathname, int flags)
+{
+    Syscall::SC_unlink_params params { dirfd, { pathname, strlen(pathname) }, flags };
+    int rc = syscall(SC_unlink, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
 
 int symlink(const char* target, const char* linkpath)
 {
+    return symlinkat(target, AT_FDCWD, linkpath);
+}
+
+int symlinkat(const char* target, int newdirfd, const char* linkpath)
+{
     if (!target || !linkpath) {
         errno = EFAULT;
         return -1;
     }
-    Syscall::SC_symlink_params params { { target, strlen(target) }, { linkpath, strlen(linkpath) } };
+    Syscall::SC_symlink_params params { { target, strlen(target) }, newdirfd, { linkpath, strlen(linkpath) } };
     int rc = syscall(SC_symlink, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
@@ -593,13 +624,19 @@ int setresgid(gid_t rgid, gid_t egid, gid_t sgid)
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
 
-int access(const char* pathname, int mode)
+int access(const char* pathname, int flags)
+{
+    return faccessat(AT_FDCWD, pathname, flags, 0);
+}
+
+int faccessat(int dirfd, const char* pathname, int mode, int flags)
 {
     if (!pathname) {
         errno = EFAULT;
         return -1;
     }
-    int rc = syscall(SC_access, pathname, strlen(pathname), mode);
+    Syscall::SC_access_params params { dirfd, { pathname, strlen(pathname) }, mode, flags };
+    int rc = syscall(SC_access, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }
 
@@ -609,7 +646,7 @@ int mknod(const char* pathname, mode_t mode, dev_t dev)
         errno = EFAULT;
         return -1;
     }
-    Syscall::SC_mknod_params params { { pathname, strlen(pathname) }, mode, dev };
+    Syscall::SC_mknod_params params { AT_FDCWD, { pathname, strlen(pathname) }, mode, dev };
     int rc = syscall(SC_mknod, &params);
     __RETURN_WITH_ERRNO(rc, rc, -1);
 }

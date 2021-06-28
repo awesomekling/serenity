@@ -333,13 +333,13 @@ KResultOr<NonnullRefPtr<FileDescription>> VFS::open(StringView path, int options
     return description;
 }
 
-KResult VFS::mknod(StringView path, mode_t mode, dev_t dev, Custody& base)
+KResult VFS::mknod(PathWithBase path_with_base, mode_t mode, dev_t dev)
 {
     if (!is_regular_file(mode) && !is_block_device(mode) && !is_character_device(mode) && !is_fifo(mode) && !is_socket(mode))
         return EINVAL;
 
     RefPtr<Custody> parent_custody;
-    auto existing_file_or_error = resolve_path(path, base, &parent_custody);
+    auto existing_file_or_error = resolve_path(path_with_base, &parent_custody);
     if (!existing_file_or_error.is_error())
         return EEXIST;
     if (!parent_custody)
@@ -353,7 +353,7 @@ KResult VFS::mknod(StringView path, mode_t mode, dev_t dev, Custody& base)
     if (parent_custody->is_readonly())
         return EROFS;
 
-    LexicalPath p(path);
+    LexicalPath p(path_with_base.path);
     dbgln("VFS::mknod: '{}' mode={} dev={} in {}", p.basename(), mode, dev, parent_inode.identifier());
     return parent_inode.create_child(p.basename(), mode, dev, current_process->euid(), current_process->egid()).result();
 }
@@ -394,17 +394,18 @@ KResultOr<NonnullRefPtr<FileDescription>> VFS::create(StringView path, int optio
     return description;
 }
 
-KResult VFS::mkdir(StringView path, mode_t mode, Custody& base)
+KResult VFS::mkdir(PathWithBase path_with_base, mode_t mode)
 {
     // Unlike in basically every other case, where it's only the last
     // path component (the one being created) that is allowed not to
     // exist, POSIX allows mkdir'ed path to have trailing slashes.
     // Let's handle that case by trimming any trailing slashes.
+    auto& path = path_with_base.path;
     while (path.length() > 1 && path.ends_with("/"))
         path = path.substring_view(0, path.length() - 1);
 
     RefPtr<Custody> parent_custody;
-    if (auto result = resolve_path(path, base, &parent_custody); !result.is_error())
+    if (auto result = resolve_path(path_with_base, &parent_custody); !result.is_error())
         return EEXIST;
     else if (!parent_custody)
         return ENOENT;
@@ -423,27 +424,37 @@ KResult VFS::mkdir(StringView path, mode_t mode, Custody& base)
     return parent_inode.create_child(p.basename(), S_IFDIR | mode, 0, current_process->euid(), current_process->egid()).result();
 }
 
-KResult VFS::access(StringView path, int mode, Custody& base)
+KResult VFS::access(PathWithBase path_with_base, int mode, AtFlags flags)
 {
-    auto custody_or_error = resolve_path(path, base);
+    if (flags & ~(AT_EACCESS | AT_SYMLINK_NOFOLLOW))
+        return EINVAL;
+
+    auto custody_or_error = resolve_path(path_with_base, nullptr, (flags & AT_SYMLINK_NOFOLLOW) ? O_NOFOLLOW_NOERROR : 0);
+    // The mode & F_OK check is implicitly handled by this.
     if (custody_or_error.is_error())
         return custody_or_error.error();
     auto& custody = *custody_or_error.value();
     auto& inode = custody.inode();
     auto metadata = inode.metadata();
     auto current_process = Process::current();
+
+    // POSIX says that we have to validate against real user and group IDs, unless AT_EACCESS is specified.
+    const auto check_uid = (flags & AT_EACCESS) ? current_process->euid() : current_process->uid();
+    const auto check_gid = (flags & AT_EACCESS) ? current_process->egid() : current_process->gid();
+    const Vector<gid_t>& extra_check_gids = current_process->extra_gids();
+
     if (mode & R_OK) {
-        if (!metadata.may_read(*current_process))
+        if (!metadata.may_read(check_uid, check_gid, extra_check_gids))
             return EACCES;
     }
     if (mode & W_OK) {
-        if (!metadata.may_write(*current_process))
+        if (!metadata.may_write(check_uid, check_gid, extra_check_gids))
             return EACCES;
         if (custody.is_readonly())
             return EROFS;
     }
     if (mode & X_OK) {
-        if (!metadata.may_execute(*current_process))
+        if (!metadata.may_execute(check_uid, check_gid, extra_check_gids))
             return EACCES;
     }
     return KSuccess;
@@ -478,26 +489,29 @@ KResult VFS::chmod(Custody& custody, mode_t mode)
     return inode.chmod(mode);
 }
 
-KResult VFS::chmod(StringView path, mode_t mode, Custody& base)
+KResult VFS::chmod(PathWithBase path_with_base, mode_t mode, AtFlags flags)
 {
-    auto custody_or_error = resolve_path(path, base);
+    if (flags & ~(AT_SYMLINK_NOFOLLOW))
+        return EINVAL;
+
+    auto custody_or_error = resolve_path(path_with_base, nullptr, (flags & AT_SYMLINK_NOFOLLOW) ? O_NOFOLLOW_NOERROR : 0);
     if (custody_or_error.is_error())
         return custody_or_error.error();
     auto& custody = *custody_or_error.value();
     return chmod(custody, mode);
 }
 
-KResult VFS::rename(StringView old_path, StringView new_path, Custody& base)
+KResult VFS::rename(PathWithBase old_path_with_base, PathWithBase new_path_with_base)
 {
     RefPtr<Custody> old_parent_custody;
-    auto old_custody_or_error = resolve_path(old_path, base, &old_parent_custody, O_NOFOLLOW_NOERROR);
+    auto old_custody_or_error = resolve_path(old_path_with_base, &old_parent_custody, O_NOFOLLOW_NOERROR);
     if (old_custody_or_error.is_error())
         return old_custody_or_error.error();
     auto& old_custody = *old_custody_or_error.value();
     auto& old_inode = old_custody.inode();
 
     RefPtr<Custody> new_parent_custody;
-    auto new_custody_or_error = resolve_path(new_path, base, &new_parent_custody);
+    auto new_custody_or_error = resolve_path(new_path_with_base, &new_parent_custody);
     if (new_custody_or_error.is_error()) {
         if (new_custody_or_error.error() != -ENOENT || !new_parent_custody)
             return new_custody_or_error.error();
@@ -533,7 +547,7 @@ KResult VFS::rename(StringView old_path, StringView new_path, Custody& base)
     if (old_parent_custody->is_readonly() || new_parent_custody->is_readonly())
         return EROFS;
 
-    auto new_basename = LexicalPath(new_path).basename();
+    auto new_basename = LexicalPath(new_path_with_base.path).basename();
 
     if (!new_custody_or_error.is_error()) {
         auto& new_custody = *new_custody_or_error.value();
@@ -554,7 +568,7 @@ KResult VFS::rename(StringView old_path, StringView new_path, Custody& base)
     if (auto result = new_parent_inode.add_child(old_inode, new_basename, old_inode.mode()); result.is_error())
         return result;
 
-    if (auto result = old_parent_inode.remove_child(LexicalPath(old_path).basename()); result.is_error())
+    if (auto result = old_parent_inode.remove_child(LexicalPath(old_path_with_base.path).basename()); result.is_error())
         return result;
 
     return KSuccess;
@@ -597,13 +611,20 @@ KResult VFS::chown(Custody& custody, uid_t a_uid, gid_t a_gid)
     return inode.chown(new_uid, new_gid);
 }
 
-KResult VFS::chown(StringView path, uid_t a_uid, gid_t a_gid, Custody& base)
+KResult VFS::chown(PathWithBase path_with_base, uid_t a_uid, gid_t a_gid, AtFlags flags)
 {
-    auto custody_or_error = resolve_path(path, base);
-    if (custody_or_error.is_error())
-        return custody_or_error.error();
-    auto& custody = *custody_or_error.value();
-    return chown(custody, a_uid, a_gid);
+    if (flags & ~(AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW))
+        return EINVAL;
+
+    if ((flags & AT_EMPTY_PATH) && path_with_base.path.is_empty()) {
+        return chown(path_with_base.base, a_uid, a_gid);
+    } else {
+        auto custody_or_error = resolve_path(path_with_base, nullptr, (flags & AT_SYMLINK_NOFOLLOW) ? O_NOFOLLOW_NOERROR : 0);
+        if (custody_or_error.is_error())
+            return custody_or_error.error();
+        auto& custody = *custody_or_error.value();
+        return chown(custody, a_uid, a_gid);
+    }
 }
 
 static bool hard_link_allowed(const Inode& inode)
@@ -623,16 +644,24 @@ static bool hard_link_allowed(const Inode& inode)
     return false;
 }
 
-KResult VFS::link(StringView old_path, StringView new_path, Custody& base)
+KResult VFS::link(PathWithBase old_path_with_base, PathWithBase new_path_with_base, AtFlags flags)
 {
-    auto old_custody_or_error = resolve_path(old_path, base);
-    if (old_custody_or_error.is_error())
-        return old_custody_or_error.error();
-    auto& old_custody = *old_custody_or_error.value();
-    auto& old_inode = old_custody.inode();
+    if (flags & ~(AT_EMPTY_PATH | AT_SYMLINK_FOLLOW))
+        return EINVAL;
+
+    RefPtr<Custody> old_custody;
+    if ((flags & AT_EMPTY_PATH) && old_path_with_base.path.is_empty()) {
+        old_custody = old_path_with_base.base;
+    } else {
+        auto old_custody_or_error = resolve_path(old_path_with_base, nullptr, (flags & AT_SYMLINK_FOLLOW) ? 0 : O_NOFOLLOW_NOERROR);
+        if (old_custody_or_error.is_error())
+            return old_custody_or_error.error();
+        old_custody = old_custody_or_error.value();
+    }
+    auto& old_inode = old_custody->inode();
 
     RefPtr<Custody> parent_custody;
-    auto new_custody_or_error = resolve_path(new_path, base, &parent_custody);
+    auto new_custody_or_error = resolve_path(new_path_with_base, &parent_custody);
     if (!new_custody_or_error.is_error())
         return EEXIST;
 
@@ -656,19 +685,24 @@ KResult VFS::link(StringView old_path, StringView new_path, Custody& base)
     if (!hard_link_allowed(old_inode))
         return EPERM;
 
-    return parent_inode.add_child(old_inode, LexicalPath(new_path).basename(), old_inode.mode());
+    return parent_inode.add_child(old_inode, LexicalPath(new_path_with_base.path).basename(), old_inode.mode());
 }
 
-KResult VFS::unlink(StringView path, Custody& base)
+KResult VFS::unlink(PathWithBase path_with_base, AtFlags flags)
 {
+    if (flags & ~(AT_REMOVEDIR))
+        return EINVAL;
+
     RefPtr<Custody> parent_custody;
-    auto custody_or_error = resolve_path(path, base, &parent_custody, O_NOFOLLOW_NOERROR | O_UNLINK_INTERNAL);
+    auto custody_or_error = resolve_path(path_with_base, &parent_custody, O_NOFOLLOW_NOERROR | O_UNLINK_INTERNAL);
     if (custody_or_error.is_error())
         return custody_or_error.error();
     auto& custody = *custody_or_error.value();
     auto& inode = custody.inode();
 
-    if (inode.is_directory())
+    if (inode.is_directory() && (flags & AT_REMOVEDIR))
+        return rmdir(path_with_base.path, path_with_base.base);
+    else if (inode.is_directory())
         return EISDIR;
 
     // We have just checked that the inode is not a directory, and thus it's not
@@ -689,16 +723,16 @@ KResult VFS::unlink(StringView path, Custody& base)
     if (parent_custody->is_readonly())
         return EROFS;
 
-    if (auto result = parent_inode.remove_child(LexicalPath(path).basename()); result.is_error())
+    if (auto result = parent_inode.remove_child(LexicalPath(path_with_base.path).basename()); result.is_error())
         return result;
 
     return KSuccess;
 }
 
-KResult VFS::symlink(StringView target, StringView linkpath, Custody& base)
+KResult VFS::symlink(StringView target, PathWithBase linkpath)
 {
     RefPtr<Custody> parent_custody;
-    auto existing_custody_or_error = resolve_path(linkpath, base, &parent_custody);
+    auto existing_custody_or_error = resolve_path(linkpath, &parent_custody);
     if (!existing_custody_or_error.is_error())
         return EEXIST;
     if (!parent_custody)
@@ -712,7 +746,7 @@ KResult VFS::symlink(StringView target, StringView linkpath, Custody& base)
     if (parent_custody->is_readonly())
         return EROFS;
 
-    LexicalPath p(linkpath);
+    LexicalPath p(linkpath.path);
     dbgln_if(VFS_DEBUG, "VFS::symlink: '{}' (-> '{}') in {}", p.basename(), target, parent_inode.identifier());
     auto inode_or_error = parent_inode.create_child(p.basename(), S_IFLNK | 0644, 0, current_process->euid(), current_process->egid());
     if (inode_or_error.is_error())
@@ -945,6 +979,9 @@ KResultOr<NonnullRefPtr<Custody>> VFS::resolve_path_without_veil(StringView path
 
     NonnullRefPtr<Custody> custody = path[0] == '/' ? current_root : base;
     bool extra_iteration = path[path.length() - 1] == '/';
+
+    if (!base.inode().is_directory())
+        return ENOTDIR;
 
     while (!path_lexer.is_eof() || extra_iteration) {
         if (path_lexer.is_eof())

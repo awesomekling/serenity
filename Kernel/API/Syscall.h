@@ -376,22 +376,29 @@ struct SC_execve_params {
 };
 
 struct SC_readlink_params {
+    int dirfd;
     StringArgument path;
     MutableBufferArgument<char, size_t> buffer;
 };
 
 struct SC_link_params {
+    int old_dirfd;
     StringArgument old_path;
+    int new_dirfd;
     StringArgument new_path;
+    int flags;
 };
 
 struct SC_chown_params {
+    int dirfd;
     StringArgument path;
     u32 uid;
     u32 gid;
+    int flags;
 };
 
 struct SC_mknod_params {
+    int dirfd;
     StringArgument path;
     u16 mode;
     u32 dev;
@@ -399,12 +406,16 @@ struct SC_mknod_params {
 
 struct SC_symlink_params {
     StringArgument target;
+    int new_dirfd;
     StringArgument linkpath;
 };
 
 struct SC_rename_params {
+    int old_dirfd;
     StringArgument old_path;
+    int new_dirfd;
     StringArgument new_path;
+    int flags;
 };
 
 struct SC_mount_params {
@@ -435,7 +446,7 @@ struct SC_stat_params {
     int dirfd;
     StringArgument path;
     struct stat* statbuf;
-    int follow_symlinks;
+    int flags;
 };
 
 struct SC_ptrace_params {
@@ -464,6 +475,32 @@ struct SC_inode_watcher_add_watch_params {
 struct SC_statvfs_params {
     StringArgument path;
     struct statvfs* buf;
+};
+
+struct SC_access_params {
+    int dirfd;
+    StringArgument path;
+    int mode;
+    int flags;
+};
+
+struct SC_chmod_params {
+    int dirfd;
+    StringArgument path;
+    u16 mode;
+    int flags;
+};
+
+struct SC_mkdir_params {
+    int dirfd;
+    StringArgument path;
+    u16 mode;
+};
+
+struct SC_unlink_params {
+    int dirfd;
+    StringArgument path;
+    int flags;
 };
 
 void initialize();

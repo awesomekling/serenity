@@ -348,19 +348,19 @@ public:
     KResultOr<int> sys$setresuid(uid_t, uid_t, uid_t);
     KResultOr<int> sys$setresgid(gid_t, gid_t, gid_t);
     KResultOr<unsigned> sys$alarm(unsigned seconds);
-    KResultOr<int> sys$access(Userspace<const char*> pathname, size_t path_length, int mode);
+    KResultOr<int> sys$access(Userspace<const Syscall::SC_access_params*>);
     KResultOr<int> sys$fcntl(int fd, int cmd, u32 extra_arg);
     KResultOr<int> sys$ioctl(int fd, unsigned request, FlatPtr arg);
-    KResultOr<int> sys$mkdir(Userspace<const char*> pathname, size_t path_length, mode_t mode);
+    KResultOr<int> sys$mkdir(Userspace<const Syscall::SC_mkdir_params*>);
     KResultOr<clock_t> sys$times(Userspace<tms*>);
     KResultOr<int> sys$utime(Userspace<const char*> pathname, size_t path_length, Userspace<const struct utimbuf*>);
     KResultOr<int> sys$link(Userspace<const Syscall::SC_link_params*>);
-    KResultOr<int> sys$unlink(Userspace<const char*> pathname, size_t path_length);
+    KResultOr<int> sys$unlink(Userspace<const Syscall::SC_unlink_params*>);
     KResultOr<int> sys$symlink(Userspace<const Syscall::SC_symlink_params*>);
     KResultOr<int> sys$rmdir(Userspace<const char*> pathname, size_t path_length);
     KResultOr<int> sys$mount(Userspace<const Syscall::SC_mount_params*>);
     KResultOr<int> sys$umount(Userspace<const char*> mountpoint, size_t mountpoint_length);
-    KResultOr<int> sys$chmod(Userspace<const char*> pathname, size_t path_length, mode_t);
+    KResultOr<int> sys$chmod(Userspace<const Syscall::SC_chmod_params*>);
     KResultOr<int> sys$fchmod(int fd, mode_t);
     KResultOr<int> sys$chown(Userspace<const Syscall::SC_chown_params*>);
     KResultOr<int> sys$fchown(int fd, uid_t, gid_t);
@@ -553,6 +553,8 @@ private:
         return get_syscall_path_argument(user_path.unsafe_userspace_ptr(), path_length);
     }
     KResultOr<NonnullOwnPtr<KString>> get_syscall_path_argument(const Syscall::StringArgument&) const;
+
+    KResultOr<RefPtr<Custody>> get_syscall_fd_argument(int fd);
 
     bool has_tracee_thread(ProcessID tracer_pid);
 
