@@ -8,10 +8,14 @@
 
 #include "History.h"
 #include <AK/URL.h>
+#include <FileSystemAccessServer/ClientConnection.h>
+#include <FileSystemAccessServer/FileSystemAccessClientEndpoint.h>
+#include <FileSystemAccessServer/FileSystemAccessServerEndpoint.h>
 #include <LibGUI/ActionGroup.h>
 #include <LibGUI/Widget.h>
 #include <LibGfx/ShareableBitmap.h>
 #include <LibHTTP/HttpJob.h>
+#include <LibIPC/ServerConnection.h>
 #include <LibWeb/Forward.h>
 
 namespace Web {
@@ -20,6 +24,23 @@ class WebViewHooks;
 }
 
 namespace Browser {
+
+class FileSystemAccessClient final
+    : public IPC::ServerConnection<FileSystemAccessClientEndpoint, FileSystemAccessServerEndpoint>
+    , public FileSystemAccessClientEndpoint {
+    C_OBJECT(FileSystemAccessClient)
+
+public:
+    virtual void die() override
+    {
+    }
+
+private:
+    explicit FileSystemAccessClient()
+        : IPC::ServerConnection<FileSystemAccessClientEndpoint, FileSystemAccessServerEndpoint>(*this, "/tmp/portal/fileaccess")
+    {
+    }
+};
 
 class BrowserWindow;
 
@@ -84,6 +105,8 @@ private:
     Type m_type;
 
     History m_history;
+
+    RefPtr<FileSystemAccessClient> m_file_system_access_client;
 
     RefPtr<Web::InProcessWebView> m_page_view;
     RefPtr<Web::OutOfProcessWebView> m_web_content_view;
