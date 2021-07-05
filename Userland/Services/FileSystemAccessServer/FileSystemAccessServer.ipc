@@ -6,4 +6,7 @@ endpoint FileSystemAccessServer
     request_file(String path, Core::OpenMode requested_access) => (i32 error, Optional<IPC::File> fd)
     prompt_open_file(String path_to_view, Core::OpenMode requested_access) => (i32 error, Optional<IPC::File> fd, Optional<String> chosen_file)
     prompt_save_file(String title, String ext, String path_to_view, Core::OpenMode requested_access) => (i32 error, Optional<IPC::File> fd, Optional<String> chosen_file)
+
+    request_download_file(URL url, String path) =|
+    prompt_download_file(URL url, String filename, String ext) =|
 }
