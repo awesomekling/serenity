@@ -280,6 +280,12 @@ public:
             && bottom() >= other.bottom();
     }
 
+    [[nodiscard]] Point<T> clamp(Point<T> const& input) const
+    {
+        return Point<T>(AK::clamp<T>(input.x(), m_location.x(), m_location.x() + m_size.width()),
+                        AK::clamp<T>(input.y(), m_location.y(), m_location.y() + m_size.height()));
+    }
+
     template<typename Container>
     [[nodiscard]] bool contains(Container const& others) const
     {
