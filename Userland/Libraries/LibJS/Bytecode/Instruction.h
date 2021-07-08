@@ -96,6 +96,9 @@ public:
     void replace_references(BasicBlock const&, BasicBlock const&);
     static void destroy(Instruction&);
 
+    Vector<Register*> write_registers();
+    Vector<Register*> read_registers();
+
 protected:
     explicit Instruction(Type type)
         : m_type(type)
