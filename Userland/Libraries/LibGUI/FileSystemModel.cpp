@@ -367,8 +367,8 @@ void FileSystemModel::set_root_path(String root_path)
     update();
 
     if (m_root->has_error()) {
-        if (on_error)
-            on_error(m_root->error(), m_root->error_string());
+        if (on_directory_change_error)
+            on_directory_change_error(m_root->error(), m_root->error_string());
     } else if (on_complete) {
         on_complete();
     }
@@ -671,13 +671,16 @@ bool FileSystemModel::is_editable(const ModelIndex& index) const
 void FileSystemModel::set_data(const ModelIndex& index, const Variant& data)
 {
     VERIFY(is_editable(index));
+    if(data.to_string().is_whitespace() || data.to_string() == "." || data.to_string() == "..")
+        return; // Filename is illegal
+
     Node& node = const_cast<Node&>(this->node(index));
     auto dirname = LexicalPath::dirname(node.full_path());
     auto new_full_path = String::formatted("{}/{}", dirname, data.to_string());
     int rc = rename(node.full_path().characters(), new_full_path.characters());
     if (rc < 0) {
-        if (on_error)
-            on_error(errno, strerror(errno));
+        if (on_rename_error)
+            on_rename_error(errno, strerror(errno));
     }
 }
 
