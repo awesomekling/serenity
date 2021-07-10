@@ -671,9 +671,6 @@ bool FileSystemModel::is_editable(const ModelIndex& index) const
 void FileSystemModel::set_data(const ModelIndex& index, const Variant& data)
 {
     VERIFY(is_editable(index));
-    if(data.to_string().is_whitespace() || data.to_string() == "." || data.to_string() == "..")
-        return; // Filename is illegal
-
     Node& node = const_cast<Node&>(this->node(index));
     auto dirname = LexicalPath::dirname(node.full_path());
     auto new_full_path = String::formatted("{}/{}", dirname, data.to_string());
