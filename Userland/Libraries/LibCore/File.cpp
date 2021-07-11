@@ -106,7 +106,7 @@ bool File::is_device() const
     return S_ISBLK(stat.st_mode) || S_ISCHR(stat.st_mode);
 }
 
-bool File::is_device(const String& filename)
+bool File::is_device(String const& filename)
 {
     struct stat st;
     if (stat(filename.characters(), &st) < 0)
@@ -122,7 +122,7 @@ bool File::is_directory() const
     return S_ISDIR(stat.st_mode);
 }
 
-bool File::is_directory(const String& filename)
+bool File::is_directory(String const& filename)
 {
     struct stat st;
     if (stat(filename.characters(), &st) < 0)
@@ -130,13 +130,13 @@ bool File::is_directory(const String& filename)
     return S_ISDIR(st.st_mode);
 }
 
-bool File::exists(const String& filename)
+bool File::exists(String const& filename)
 {
     struct stat st;
     return stat(filename.characters(), &st) == 0;
 }
 
-String File::real_path_for(const String& filename)
+String File::real_path_for(String const& filename)
 {
     if (filename.is_null())
         return {};
@@ -146,7 +146,7 @@ String File::real_path_for(const String& filename)
     return real_path;
 }
 
-bool File::ensure_parent_directories(const String& path)
+bool File::ensure_parent_directories(String const& path)
 {
     VERIFY(path.starts_with("/"));
 
@@ -156,7 +156,7 @@ bool File::ensure_parent_directories(const String& path)
     char* parent_buffer = strdup(path.characters());
     ScopeGuard free_buffer = [parent_buffer] { free(parent_buffer); };
 
-    const char* parent = dirname(parent_buffer);
+    char const* parent = dirname(parent_buffer);
 
     int rc = mkdir(parent, 0755);
     saved_errno = errno;
@@ -175,6 +175,34 @@ bool File::ensure_parent_directories(const String& path)
     rc = mkdir(parent, 0755);
     saved_errno = errno;
     return rc == 0;
+}
+
+String File::current_working_directory()
+{
+    char* cwd = getcwd(nullptr, 0);
+    if (!cwd) {
+        perror("getcwd");
+        return {};
+    }
+
+    auto cwd_as_string = String(cwd);
+    free(cwd);
+
+    return cwd_as_string;
+}
+
+String File::absolute_path(String const& path)
+{
+    if (File::exists(path))
+        return File::real_path_for(path);
+
+    if (path.starts_with("/"sv))
+        return LexicalPath::canonicalized_path(path);
+
+    auto working_directory = File::current_working_directory();
+    auto full_path = LexicalPath::join(working_directory, path);
+
+    return LexicalPath::canonicalized_path(full_path.string());
 }
 
 #ifdef __serenity__
@@ -269,7 +297,7 @@ NonnullRefPtr<File> File::standard_error()
     return *stderr_file;
 }
 
-static String get_duplicate_name(const String& path, int duplicate_count)
+static String get_duplicate_name(String const& path, int duplicate_count)
 {
     if (duplicate_count == 0) {
         return path;
@@ -294,7 +322,7 @@ static String get_duplicate_name(const String& path, int duplicate_count)
     return duplicated_name.build();
 }
 
-Result<void, File::CopyError> File::copy_file_or_directory(const String& dst_path, const String& src_path, RecursionMode recursion_mode, LinkMode link_mode, AddDuplicateFileMarker add_duplicate_file_marker)
+Result<void, File::CopyError> File::copy_file_or_directory(String const& dst_path, String const& src_path, RecursionMode recursion_mode, LinkMode link_mode, AddDuplicateFileMarker add_duplicate_file_marker)
 {
     if (add_duplicate_file_marker == AddDuplicateFileMarker::Yes) {
         int duplicate_count = 0;
@@ -332,7 +360,7 @@ Result<void, File::CopyError> File::copy_file_or_directory(const String& dst_pat
     return copy_file(dst_path, src_stat, source);
 }
 
-Result<void, File::CopyError> File::copy_file(const String& dst_path, const struct stat& src_stat, File& source)
+Result<void, File::CopyError> File::copy_file(String const& dst_path, struct stat const& src_stat, File& source)
 {
     int dst_fd = creat(dst_path.characters(), 0666);
     if (dst_fd < 0) {
@@ -382,7 +410,7 @@ Result<void, File::CopyError> File::copy_file(const String& dst_path, const stru
     return {};
 }
 
-Result<void, File::CopyError> File::copy_directory(const String& dst_path, const String& src_path, const struct stat& src_stat, LinkMode link)
+Result<void, File::CopyError> File::copy_directory(String const& dst_path, String const& src_path, struct stat const& src_stat, LinkMode link)
 {
     if (mkdir(dst_path.characters(), 0755) < 0)
         return CopyError { OSError(errno), false };
@@ -417,7 +445,7 @@ Result<void, File::CopyError> File::copy_directory(const String& dst_path, const
     return {};
 }
 
-Result<void, OSError> File::link_file(const String& dst_path, const String& src_path)
+Result<void, OSError> File::link_file(String const& dst_path, String const& src_path)
 {
     int duplicate_count = 0;
     while (access(get_duplicate_name(dst_path, duplicate_count).characters(), F_OK) == 0) {
@@ -434,7 +462,7 @@ Result<void, OSError> File::link_file(const String& dst_path, const String& src_
     return {};
 }
 
-Result<void, File::RemoveError> File::remove(const String& path, RecursionMode mode, bool force)
+Result<void, File::RemoveError> File::remove(String const& path, RecursionMode mode, bool force)
 {
     struct stat path_stat;
     if (lstat(path.characters(), &path_stat) < 0) {
