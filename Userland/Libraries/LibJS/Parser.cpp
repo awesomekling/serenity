@@ -952,6 +952,11 @@ NonnullRefPtr<ObjectExpression> Parser::parse_object_expression()
             consume();
     };
 
+    // It is a Syntax Error if PropertyNameList of PropertyDefinitionList contains any duplicate
+    // entries for "__proto__" and at least two of those entries were obtained from productions  of
+    // the form PropertyDefinition : PropertyName : AssignmentExpression .
+    bool has_direct_proto_property = false;
+
     while (!done() && !match(TokenType::CurlyClose)) {
         property_type = ObjectProperty::Type::KeyValue;
         RefPtr<Expression> property_name;
@@ -967,6 +972,8 @@ NonnullRefPtr<ObjectExpression> Parser::parse_object_expression()
             consume(TokenType::Comma);
             continue;
         }
+
+        TokenType type = m_state.current_token.type();
 
         if (match(TokenType::Asterisk)) {
             consume();
@@ -988,6 +995,8 @@ NonnullRefPtr<ObjectExpression> Parser::parse_object_expression()
         } else {
             property_name = parse_property_key();
         }
+
+        bool is_proto = (type == TokenType::StringLiteral || type == TokenType::Identifier) && is<StringLiteral>(*property_name) && static_cast<StringLiteral const&>(*property_name).value() == "__proto__";
 
         if (property_type == ObjectProperty::Type::Getter || property_type == ObjectProperty::Type::Setter) {
             if (!match(TokenType::ParenOpen)) {
@@ -1021,6 +1030,11 @@ NonnullRefPtr<ObjectExpression> Parser::parse_object_expression()
                 continue;
             }
             consume();
+            if (is_proto) {
+                if (has_direct_proto_property)
+                    syntax_error("property name: __proto__ appears more than once in object literal");
+                has_direct_proto_property = true;
+            }
             properties.append(create_ast_node<ObjectProperty>({ m_state.current_token.filename(), rule_start.position(), position() }, *property_name, parse_expression(2), property_type, false));
         } else if (property_name && property_value) {
             properties.append(create_ast_node<ObjectProperty>({ m_state.current_token.filename(), rule_start.position(), position() }, *property_name, *property_value, property_type, false));
