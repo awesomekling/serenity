@@ -44,7 +44,7 @@
 namespace TextEditor {
 
 MainWidget::MainWidget()
-    : m_file_system_access_client(FileSystemAccessClient::construct())
+    : m_file_system_access_client(FileSystemAccessClient::Client::construct())
 {
     load_from_gml(text_editor_window_gml);
 

@@ -8,60 +8,16 @@
 
 #include <AK/Function.h>
 #include <AK/LexicalPath.h>
-#include <FileSystemAccessServer/FileSystemAccessClientEndpoint.h>
-#include <FileSystemAccessServer/FileSystemAccessServerEndpoint.h>
-#include <LibCore/StandardPaths.h>
+#include <LibFileSystemAccessClient/Client.h>
 #include <LibGUI/ActionGroup.h>
 #include <LibGUI/Application.h>
 #include <LibGUI/Icon.h>
 #include <LibGUI/TextEditor.h>
 #include <LibGUI/Widget.h>
 #include <LibGUI/Window.h>
-#include <LibIPC/ServerConnection.h>
 #include <LibWeb/Forward.h>
 
 namespace TextEditor {
-
-class FileSystemAccessClient final
-    : public IPC::ServerConnection<FileSystemAccessClientEndpoint, FileSystemAccessServerEndpoint>
-    , public FileSystemAccessClientEndpoint {
-    C_OBJECT(FileSystemAccessClient)
-
-public:
-    virtual void die() override
-    {
-    }
-
-    void open_file(Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> new_callback)
-    {
-        m_callback = move(new_callback);
-
-        async_prompt_open_file(Core::StandardPaths::home_directory(), Core::OpenMode::ReadOnly);
-    }
-
-    void save_file(String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> new_callback)
-    {
-        m_callback = move(new_callback);
-
-        async_prompt_save_file(name.is_null() ? "Untitled" : name, ext.is_null() ? "txt" : ext, Core::StandardPaths::home_directory(), Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
-    }
-
-private:
-    explicit FileSystemAccessClient()
-        : IPC::ServerConnection<FileSystemAccessClientEndpoint, FileSystemAccessServerEndpoint>(*this, "/tmp/portal/filesystemaccess")
-    {
-    }
-
-    virtual void handle_prompt_end(i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) override
-    {
-        m_callback(error, fd, chosen_file);
-        m_callback = [](i32, Optional<IPC::File> const&, Optional<String> const&) {
-            VERIFY_NOT_REACHED();
-        };
-    }
-
-    Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> m_callback;
-};
 
 class MainWidget final : public GUI::Widget {
     C_OBJECT(MainWidget);
@@ -98,7 +54,7 @@ private:
 
     virtual void drop_event(GUI::DropEvent&) override;
 
-    NonnullRefPtr<FileSystemAccessClient> m_file_system_access_client;
+    NonnullRefPtr<FileSystemAccessClient::Client> m_file_system_access_client;
 
     RefPtr<GUI::TextEditor> m_editor;
     String m_path;
