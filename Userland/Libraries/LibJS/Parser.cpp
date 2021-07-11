@@ -1951,6 +1951,30 @@ NonnullRefPtr<VariableDeclaration> Parser::parse_variable_declaration(bool for_l
             check_identifier_name_for_assignment_validity(name);
             if ((declaration_kind == DeclarationKind::Let || declaration_kind == DeclarationKind::Const) && name == "let"sv)
                 syntax_error("Lexical binding may not be called 'let'");
+
+            // Check we do not have duplicates
+            auto check_declarations = [&](VariableDeclarator const& declarator) {
+                declarator.target().visit([&](NonnullRefPtr<Identifier> const& identifier) {
+                    if (identifier->string() == name)
+                        syntax_error(String::formatted("Identifier '{}' has already been declared", name));
+                });
+            };
+
+            // In any previous let scope
+            if (!m_state.let_scopes.is_empty()) {
+                for (auto& decls : m_state.let_scopes.last()) {
+                    for (auto& decl : decls.declarations()) {
+                        check_declarations(decl);
+                    }
+                }
+            }
+
+            // FIXME: we should also check var_scopes but just copying let_scopes does not work
+
+            // or this declaration
+            for (auto& declaration : declarations) {
+                check_declarations(declaration);
+            }
         } else if (auto pattern = parse_binding_pattern()) {
             target = pattern.release_nonnull();
 
