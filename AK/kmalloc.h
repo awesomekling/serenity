@@ -17,7 +17,11 @@
 #    define kmalloc malloc
 #    define kmalloc_good_size malloc_good_size
 #    define kfree free
-#    define krealloc realloc
+
+inline void kfree_sized(void* ptr, size_t)
+{
+    kfree(ptr);
+}
 #endif
 
 #ifndef __serenity__
