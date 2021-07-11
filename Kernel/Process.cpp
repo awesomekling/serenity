@@ -135,7 +135,7 @@ void Process::register_new(Process& process)
     RefPtr<Process> new_process = process;
     ScopedSpinLock lock(g_processes_lock);
     g_processes->prepend(process);
-    ProcFSComponentsRegistrar::the().register_new_process(process);
+    ProcFSComponentRegistry::the().register_new_process(process);
 }
 
 RefPtr<Process> Process::create_user_process(RefPtr<Thread>& first_thread, const String& path, uid_t uid, gid_t gid, ProcessID parent_pid, int& error, Vector<String>&& arguments, Vector<String>&& environment, TTY* tty)
@@ -153,7 +153,7 @@ RefPtr<Process> Process::create_user_process(RefPtr<Thread>& first_thread, const
     }
 
     if (!cwd)
-        cwd = VFS::the().root_custody();
+        cwd = VirtualFileSystem::the().root_custody();
 
     auto process = Process::create(first_thread, parts.take_last(), uid, gid, parent_pid, false, move(cwd), nullptr, tty);
     if (!first_thread)
@@ -488,7 +488,7 @@ siginfo_t Process::wait_info()
 Custody& Process::current_directory()
 {
     if (!m_cwd)
-        m_cwd = VFS::the().root_custody();
+        m_cwd = VirtualFileSystem::the().root_custody();
     return *m_cwd;
 }
 
@@ -526,7 +526,7 @@ bool Process::dump_perfcore()
     VERIFY(is_dumpable());
     VERIFY(m_perf_event_buffer);
     dbgln("Generating perfcore for pid: {}", pid().value());
-    auto description_or_error = VFS::the().open(String::formatted("perfcore.{}", pid().value()), O_CREAT | O_EXCL, 0400, current_directory(), UidAndGid { uid(), gid() });
+    auto description_or_error = VirtualFileSystem::the().open(String::formatted("perfcore.{}", pid().value()), O_CREAT | O_EXCL, 0400, current_directory(), UidAndGid { uid(), gid() });
     if (description_or_error.is_error())
         return false;
     auto& description = description_or_error.value();
@@ -576,7 +576,7 @@ void Process::finalize()
     // If we don't do it here, we can't drop the object later, and we can't
     // do this from the destructor because the state of the object doesn't
     // allow us to take references anymore.
-    ProcFSComponentsRegistrar::the().unregister_process(*this);
+    ProcFSComponentRegistry::the().unregister_process(*this);
 
     m_dead = true;
 
@@ -728,7 +728,7 @@ void Process::FileDescriptionAndFlags::clear()
 void Process::FileDescriptionAndFlags::refresh_inode_index()
 {
     // FIXME: Verify Process::m_fds_lock is locked!
-    m_global_procfs_inode_index = ProcFSComponentsRegistrar::the().allocate_inode_index();
+    m_global_procfs_inode_index = ProcFSComponentRegistry::the().allocate_inode_index();
 }
 
 void Process::FileDescriptionAndFlags::set(NonnullRefPtr<FileDescription>&& description, u32 flags)
@@ -736,13 +736,13 @@ void Process::FileDescriptionAndFlags::set(NonnullRefPtr<FileDescription>&& desc
     // FIXME: Verify Process::m_fds_lock is locked!
     m_description = move(description);
     m_flags = flags;
-    m_global_procfs_inode_index = ProcFSComponentsRegistrar::the().allocate_inode_index();
+    m_global_procfs_inode_index = ProcFSComponentRegistry::the().allocate_inode_index();
 }
 
 Custody& Process::root_directory()
 {
     if (!m_root_directory)
-        m_root_directory = VFS::the().root_custody();
+        m_root_directory = VirtualFileSystem::the().root_custody();
     return *m_root_directory;
 }
 

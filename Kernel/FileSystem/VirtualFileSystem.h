@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -16,6 +16,7 @@
 #include <Kernel/FileSystem/FileSystem.h>
 #include <Kernel/FileSystem/InodeIdentifier.h>
 #include <Kernel/FileSystem/InodeMetadata.h>
+#include <Kernel/FileSystem/Mount.h>
 #include <Kernel/KResult.h>
 #include <Kernel/UnveilNode.h>
 
@@ -30,42 +31,17 @@ struct UidAndGid {
     gid_t gid;
 };
 
-class VFS {
+class VirtualFileSystem {
     AK_MAKE_ETERNAL
 public:
-    class Mount {
-    public:
-        Mount(FS&, Custody* host_custody, int flags);
-        Mount(Inode& source, Custody& host_custody, int flags);
-
-        const Inode* host() const;
-        Inode* host();
-
-        const Inode& guest() const { return *m_guest; }
-        Inode& guest() { return *m_guest; }
-
-        const FS& guest_fs() const { return *m_guest_fs; }
-
-        String absolute_path() const;
-
-        int flags() const { return m_flags; }
-        void set_flags(int flags) { m_flags = flags; }
-
-    private:
-        NonnullRefPtr<Inode> m_guest;
-        NonnullRefPtr<FS> m_guest_fs;
-        RefPtr<Custody> m_host_custody;
-        int m_flags;
-    };
-
     static void initialize();
-    static VFS& the();
+    static VirtualFileSystem& the();
 
-    VFS();
-    ~VFS();
+    VirtualFileSystem();
+    ~VirtualFileSystem();
 
-    bool mount_root(FS&);
-    KResult mount(FS&, Custody& mount_point, int flags);
+    bool mount_root(FileSystem&);
+    KResult mount(FileSystem&, Custody& mount_point, int flags);
     KResult bind_mount(Custody& source, Custody& mount_point, int flags);
     KResult remount(Custody& mount_point, int new_flags);
     KResult unmount(Inode& guest_inode);
@@ -93,7 +69,7 @@ public:
 
     InodeIdentifier root_inode_id() const;
 
-    void sync();
+    static void sync();
 
     Custody& root_custody();
     KResultOr<NonnullRefPtr<Custody>> resolve_path(StringView path, Custody& base, RefPtr<Custody>* out_parent = nullptr, int options = 0, int symlink_recursion_level = 0);
@@ -108,11 +84,9 @@ private:
 
     bool is_vfs_root(InodeIdentifier) const;
 
-    KResult traverse_directory_inode(Inode&, Function<bool(const FS::DirectoryEntryView&)>);
+    KResult traverse_directory_inode(Inode&, Function<bool(FileSystem::DirectoryEntryView const&)>);
 
-    Mount* find_mount_for_host(Inode&);
     Mount* find_mount_for_host(InodeIdentifier);
-    Mount* find_mount_for_guest(Inode&);
     Mount* find_mount_for_guest(InodeIdentifier);
 
     Lock m_lock { "VFSLock" };

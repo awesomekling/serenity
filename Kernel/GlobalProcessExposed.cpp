@@ -29,6 +29,7 @@
 #include <Kernel/Net/UDPSocket.h>
 #include <Kernel/ProcessExposed.h>
 #include <Kernel/Sections.h>
+#include <Kernel/TTY/TTY.h>
 
 namespace Kernel {
 
@@ -157,20 +158,20 @@ private:
     }
 };
 
-class ProcFSNetworkDirectory : public ProcFSExposedFolder {
+class ProcFSNetworkDirectory : public ProcFSExposedDirectory {
 public:
-    static NonnullRefPtr<ProcFSNetworkDirectory> must_create(const ProcFSRootFolder& parent_folder);
+    static NonnullRefPtr<ProcFSNetworkDirectory> must_create(const ProcFSRootDirectory& parent_folder);
 
 private:
-    ProcFSNetworkDirectory(const ProcFSRootFolder& parent_folder);
+    ProcFSNetworkDirectory(const ProcFSRootDirectory& parent_folder);
 };
 
-class ProcFSSystemDirectory : public ProcFSExposedFolder {
+class ProcFSSystemDirectory : public ProcFSExposedDirectory {
 public:
-    static NonnullRefPtr<ProcFSSystemDirectory> must_create(const ProcFSRootFolder& parent_folder);
+    static NonnullRefPtr<ProcFSSystemDirectory> must_create(const ProcFSRootDirectory& parent_folder);
 
 private:
-    ProcFSSystemDirectory(const ProcFSRootFolder& parent_folder);
+    ProcFSSystemDirectory(const ProcFSRootDirectory& parent_folder);
 };
 
 UNMAP_AFTER_INIT NonnullRefPtr<ProcFSAdapters> ProcFSAdapters::must_create()
@@ -194,7 +195,7 @@ UNMAP_AFTER_INIT NonnullRefPtr<ProcFSUDP> ProcFSUDP::must_create()
     return adopt_ref_if_nonnull(new (nothrow) ProcFSUDP).release_nonnull();
 }
 
-UNMAP_AFTER_INIT NonnullRefPtr<ProcFSNetworkDirectory> ProcFSNetworkDirectory::must_create(const ProcFSRootFolder& parent_folder)
+UNMAP_AFTER_INIT NonnullRefPtr<ProcFSNetworkDirectory> ProcFSNetworkDirectory::must_create(const ProcFSRootDirectory& parent_folder)
 {
     auto folder = adopt_ref(*new (nothrow) ProcFSNetworkDirectory(parent_folder));
     folder->m_components.append(ProcFSAdapters::must_create());
@@ -225,8 +226,8 @@ UNMAP_AFTER_INIT ProcFSUDP::ProcFSUDP()
     : ProcFSGlobalInformation("udp"sv)
 {
 }
-UNMAP_AFTER_INIT ProcFSNetworkDirectory::ProcFSNetworkDirectory(const ProcFSRootFolder& parent_folder)
-    : ProcFSExposedFolder("net"sv, parent_folder)
+UNMAP_AFTER_INIT ProcFSNetworkDirectory::ProcFSNetworkDirectory(const ProcFSRootDirectory& parent_folder)
+    : ProcFSExposedDirectory("net"sv, parent_folder)
 {
 }
 
@@ -317,12 +318,12 @@ UNMAP_AFTER_INIT ProcFSCapsLockRemap::ProcFSCapsLockRemap()
 {
 }
 
-class ProcFSSelfProcessFolder final : public ProcFSExposedLink {
+class ProcFSSelfProcessDirectory final : public ProcFSExposedLink {
 public:
-    static NonnullRefPtr<ProcFSSelfProcessFolder> must_create();
+    static NonnullRefPtr<ProcFSSelfProcessDirectory> must_create();
 
 private:
-    ProcFSSelfProcessFolder();
+    ProcFSSelfProcessDirectory();
     virtual bool acquire_link(KBufferBuilder& builder) override
     {
         builder.appendff("{}", Process::current()->pid().value());
@@ -339,7 +340,7 @@ private:
     virtual bool output(KBufferBuilder& builder) override
     {
         JsonArraySerializer array { builder };
-        VFS::the().for_each_mount([&array](auto& mount) {
+        VirtualFileSystem::the().for_each_mount([&array](auto& mount) {
             auto& fs = mount.guest_fs();
             auto fs_object = array.add_object();
             fs_object.add("class_name", fs.class_name());
@@ -353,7 +354,7 @@ private:
             fs_object.add("mount_flags", mount.flags());
 
             if (fs.is_file_backed())
-                fs_object.add("source", static_cast<const FileBackedFS&>(fs).file_description().absolute_path());
+                fs_object.add("source", static_cast<const FileBackedFileSystem&>(fs).file_description().absolute_path());
             else
                 fs_object.add("source", "none");
         });
@@ -700,9 +701,9 @@ private:
     }
 };
 
-UNMAP_AFTER_INIT NonnullRefPtr<ProcFSSelfProcessFolder> ProcFSSelfProcessFolder::must_create()
+UNMAP_AFTER_INIT NonnullRefPtr<ProcFSSelfProcessDirectory> ProcFSSelfProcessDirectory::must_create()
 {
-    return adopt_ref_if_nonnull(new (nothrow) ProcFSSelfProcessFolder()).release_nonnull();
+    return adopt_ref_if_nonnull(new (nothrow) ProcFSSelfProcessDirectory()).release_nonnull();
 }
 UNMAP_AFTER_INIT NonnullRefPtr<ProcFSDiskUsage> ProcFSDiskUsage::must_create()
 {
@@ -757,7 +758,7 @@ UNMAP_AFTER_INIT NonnullRefPtr<ProcFSProfile> ProcFSProfile::must_create()
     return adopt_ref_if_nonnull(new (nothrow) ProcFSProfile).release_nonnull();
 }
 
-UNMAP_AFTER_INIT ProcFSSelfProcessFolder::ProcFSSelfProcessFolder()
+UNMAP_AFTER_INIT ProcFSSelfProcessDirectory::ProcFSSelfProcessDirectory()
     : ProcFSExposedLink("self"sv)
 {
 }
@@ -814,13 +815,13 @@ UNMAP_AFTER_INIT ProcFSProfile::ProcFSProfile()
 {
 }
 
-UNMAP_AFTER_INIT NonnullRefPtr<ProcFSBusDirectory> ProcFSBusDirectory::must_create(const ProcFSRootFolder& parent_folder)
+UNMAP_AFTER_INIT NonnullRefPtr<ProcFSBusDirectory> ProcFSBusDirectory::must_create(const ProcFSRootDirectory& parent_folder)
 {
     auto folder = adopt_ref(*new (nothrow) ProcFSBusDirectory(parent_folder));
     return folder;
 }
 
-UNMAP_AFTER_INIT NonnullRefPtr<ProcFSSystemDirectory> ProcFSSystemDirectory::must_create(const ProcFSRootFolder& parent_folder)
+UNMAP_AFTER_INIT NonnullRefPtr<ProcFSSystemDirectory> ProcFSSystemDirectory::must_create(const ProcFSRootDirectory& parent_folder)
 {
     auto folder = adopt_ref(*new (nothrow) ProcFSSystemDirectory(parent_folder));
     folder->m_components.append(ProcFSDumpKmallocStacks::must_create(folder));
@@ -829,19 +830,19 @@ UNMAP_AFTER_INIT NonnullRefPtr<ProcFSSystemDirectory> ProcFSSystemDirectory::mus
     return folder;
 }
 
-UNMAP_AFTER_INIT ProcFSBusDirectory::ProcFSBusDirectory(const ProcFSRootFolder& parent_folder)
-    : ProcFSExposedFolder("bus"sv, parent_folder)
+UNMAP_AFTER_INIT ProcFSBusDirectory::ProcFSBusDirectory(const ProcFSRootDirectory& parent_folder)
+    : ProcFSExposedDirectory("bus"sv, parent_folder)
 {
 }
-UNMAP_AFTER_INIT ProcFSSystemDirectory::ProcFSSystemDirectory(const ProcFSRootFolder& parent_folder)
-    : ProcFSExposedFolder("sys"sv, parent_folder)
+UNMAP_AFTER_INIT ProcFSSystemDirectory::ProcFSSystemDirectory(const ProcFSRootDirectory& parent_folder)
+    : ProcFSExposedDirectory("sys"sv, parent_folder)
 {
 }
 
-UNMAP_AFTER_INIT NonnullRefPtr<ProcFSRootFolder> ProcFSRootFolder::must_create()
+UNMAP_AFTER_INIT NonnullRefPtr<ProcFSRootDirectory> ProcFSRootDirectory::must_create()
 {
-    auto folder = adopt_ref(*new (nothrow) ProcFSRootFolder);
-    folder->m_components.append(ProcFSSelfProcessFolder::must_create());
+    auto folder = adopt_ref(*new (nothrow) ProcFSRootDirectory);
+    folder->m_components.append(ProcFSSelfProcessDirectory::must_create());
     folder->m_components.append(ProcFSDiskUsage::must_create());
     folder->m_components.append(ProcFSMemoryStatus::must_create());
     folder->m_components.append(ProcFSOverallProcesses::must_create());
@@ -864,9 +865,9 @@ UNMAP_AFTER_INIT NonnullRefPtr<ProcFSRootFolder> ProcFSRootFolder::must_create()
     return folder;
 }
 
-KResult ProcFSRootFolder::traverse_as_directory(unsigned fsid, Function<bool(const FS::DirectoryEntryView&)> callback) const
+KResult ProcFSRootDirectory::traverse_as_directory(unsigned fsid, Function<bool(FileSystem::DirectoryEntryView const&)> callback) const
 {
-    Locker locker(ProcFSComponentsRegistrar::the().m_lock);
+    Locker locker(ProcFSComponentRegistry::the().get_lock());
     callback({ ".", { fsid, component_index() }, 0 });
     callback({ "..", { fsid, 0 }, 0 });
 
@@ -881,9 +882,9 @@ KResult ProcFSRootFolder::traverse_as_directory(unsigned fsid, Function<bool(con
     return KSuccess;
 }
 
-RefPtr<ProcFSExposedComponent> ProcFSRootFolder::lookup(StringView name)
+RefPtr<ProcFSExposedComponent> ProcFSRootDirectory::lookup(StringView name)
 {
-    if (auto candidate = ProcFSExposedFolder::lookup(name); !candidate.is_null())
+    if (auto candidate = ProcFSExposedDirectory::lookup(name); !candidate.is_null())
         return candidate;
 
     for (auto& component : m_process_folders) {
@@ -894,16 +895,16 @@ RefPtr<ProcFSExposedComponent> ProcFSRootFolder::lookup(StringView name)
     return {};
 }
 
-UNMAP_AFTER_INIT ProcFSRootFolder::ProcFSRootFolder()
-    : ProcFSExposedFolder("."sv)
+UNMAP_AFTER_INIT ProcFSRootDirectory::ProcFSRootDirectory()
+    : ProcFSExposedDirectory("."sv)
 {
 }
 
-UNMAP_AFTER_INIT ProcFSRootFolder::~ProcFSRootFolder()
+UNMAP_AFTER_INIT ProcFSRootDirectory::~ProcFSRootDirectory()
 {
 }
 
-RefPtr<ProcFSProcessFolder> ProcFSRootFolder::process_folder_for(Process& process)
+RefPtr<ProcFSProcessDirectory> ProcFSRootDirectory::process_folder_for(Process& process)
 {
     RefPtr<Process> checked_process = process;
     for (auto& folder : m_process_folders) {

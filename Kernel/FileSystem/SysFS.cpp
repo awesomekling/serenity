@@ -5,46 +5,44 @@
  */
 
 #include <AK/Singleton.h>
-#include <AK/StringBuilder.h>
 #include <AK/StringView.h>
 #include <Kernel/FileSystem/SysFS.h>
-#include <Kernel/FileSystem/VirtualFileSystem.h>
 #include <Kernel/Sections.h>
 
 namespace Kernel {
 
-static AK::Singleton<SystemRegistrar> s_the;
+static AK::Singleton<SysFSComponentRegistry> s_the;
 
-SystemRegistrar& SystemRegistrar::the()
+SysFSComponentRegistry& SysFSComponentRegistry::the()
 {
     return *s_the;
 }
 
-UNMAP_AFTER_INIT void SystemRegistrar::initialize()
+UNMAP_AFTER_INIT void SysFSComponentRegistry::initialize()
 {
     VERIFY(!s_the.is_initialized());
     s_the.ensure_instance();
 }
 
-UNMAP_AFTER_INIT SystemRegistrar::SystemRegistrar()
-    : m_root_folder(SysFSRootFolder::create())
+UNMAP_AFTER_INIT SysFSComponentRegistry::SysFSComponentRegistry()
+    : m_root_folder(SysFSRootDirectory::create())
 {
 }
 
-UNMAP_AFTER_INIT void SystemRegistrar::register_new_component(SystemExposedComponent& component)
+UNMAP_AFTER_INIT void SysFSComponentRegistry::register_new_component(SysFSComponent& component)
 {
     Locker locker(m_lock);
     m_root_folder->m_components.append(component);
 }
 
-NonnullRefPtr<SysFSRootFolder> SysFSRootFolder::create()
+NonnullRefPtr<SysFSRootDirectory> SysFSRootDirectory::create()
 {
-    return adopt_ref(*new (nothrow) SysFSRootFolder);
+    return adopt_ref(*new (nothrow) SysFSRootDirectory);
 }
 
-KResult SysFSRootFolder::traverse_as_directory(unsigned fsid, Function<bool(const FS::DirectoryEntryView&)> callback) const
+KResult SysFSRootDirectory::traverse_as_directory(unsigned fsid, Function<bool(FileSystem::DirectoryEntryView const&)> callback) const
 {
-    Locker locker(SystemRegistrar::the().m_lock);
+    Locker locker(SysFSComponentRegistry::the().get_lock());
     callback({ ".", { fsid, component_index() }, 0 });
     callback({ "..", { fsid, 0 }, 0 });
 
@@ -55,8 +53,8 @@ KResult SysFSRootFolder::traverse_as_directory(unsigned fsid, Function<bool(cons
     return KSuccess;
 }
 
-SysFSRootFolder::SysFSRootFolder()
-    : SystemExposedFolder(".")
+SysFSRootDirectory::SysFSRootDirectory()
+    : SysFSDirectory(".")
 {
 }
 
@@ -66,9 +64,8 @@ NonnullRefPtr<SysFS> SysFS::create()
 }
 
 SysFS::SysFS()
-    : m_root_inode(SystemRegistrar::the().m_root_folder->to_inode(*this))
+    : m_root_inode(SysFSComponentRegistry::the().root_folder().to_inode(*this))
 {
-    Locker locker(m_lock);
 }
 
 SysFS::~SysFS()
@@ -85,12 +82,12 @@ NonnullRefPtr<Inode> SysFS::root_inode() const
     return *m_root_inode;
 }
 
-NonnullRefPtr<SysFSInode> SysFSInode::create(const SysFS& fs, const SystemExposedComponent& component)
+NonnullRefPtr<SysFSInode> SysFSInode::create(SysFS const& fs, SysFSComponent const& component)
 {
     return adopt_ref(*new (nothrow) SysFSInode(fs, component));
 }
 
-SysFSInode::SysFSInode(const SysFS& fs, const SystemExposedComponent& component)
+SysFSInode::SysFSInode(SysFS const& fs, SysFSComponent const& component)
     : Inode(const_cast<SysFS&>(fs), component.component_index())
     , m_associated_component(component)
 {
@@ -101,7 +98,7 @@ KResultOr<size_t> SysFSInode::read_bytes(off_t offset, size_t count, UserOrKerne
     return m_associated_component->read_bytes(offset, count, buffer, fd);
 }
 
-KResult SysFSInode::traverse_as_directory(Function<bool(const FS::DirectoryEntryView&)>) const
+KResult SysFSInode::traverse_as_directory(Function<bool(FileSystem::DirectoryEntryView const&)>) const
 {
     VERIFY_NOT_REACHED();
 }
@@ -128,22 +125,22 @@ void SysFSInode::flush_metadata()
 {
 }
 
-KResultOr<size_t> SysFSInode::write_bytes(off_t offset, size_t count, const UserOrKernelBuffer& buffer, FileDescription* fd)
+KResultOr<size_t> SysFSInode::write_bytes(off_t offset, size_t count, UserOrKernelBuffer const& buffer, FileDescription* fd)
 {
     return m_associated_component->write_bytes(offset, count, buffer, fd);
 }
 
-KResultOr<NonnullRefPtr<Inode>> SysFSInode::create_child(const String&, mode_t, dev_t, uid_t, gid_t)
+KResultOr<NonnullRefPtr<Inode>> SysFSInode::create_child(String const&, mode_t, dev_t, uid_t, gid_t)
 {
     return EROFS;
 }
 
-KResult SysFSInode::add_child(Inode&, const StringView&, mode_t)
+KResult SysFSInode::add_child(Inode&, StringView const&, mode_t)
 {
     return EROFS;
 }
 
-KResult SysFSInode::remove_child(const StringView&)
+KResult SysFSInode::remove_child(StringView const&)
 {
     return EROFS;
 }
@@ -168,12 +165,12 @@ KResult SysFSInode::truncate(u64)
     return EPERM;
 }
 
-NonnullRefPtr<SysFSDirectoryInode> SysFSDirectoryInode::create(const SysFS& sysfs, const SystemExposedComponent& component)
+NonnullRefPtr<SysFSDirectoryInode> SysFSDirectoryInode::create(SysFS const& sysfs, SysFSComponent const& component)
 {
     return adopt_ref(*new (nothrow) SysFSDirectoryInode(sysfs, component));
 }
 
-SysFSDirectoryInode::SysFSDirectoryInode(const SysFS& fs, const SystemExposedComponent& component)
+SysFSDirectoryInode::SysFSDirectoryInode(SysFS const& fs, SysFSComponent const& component)
     : SysFSInode(fs, component)
     , m_parent_fs(const_cast<SysFS&>(fs))
 {
@@ -194,7 +191,7 @@ InodeMetadata SysFSDirectoryInode::metadata() const
     metadata.mtime = mepoch;
     return metadata;
 }
-KResult SysFSDirectoryInode::traverse_as_directory(Function<bool(const FS::DirectoryEntryView&)> callback) const
+KResult SysFSDirectoryInode::traverse_as_directory(Function<bool(FileSystem::DirectoryEntryView const&)> callback) const
 {
     Locker locker(m_parent_fs.m_lock);
     return m_associated_component->traverse_as_directory(m_parent_fs.fsid(), move(callback));

@@ -13,8 +13,7 @@
 #include <Kernel/PhysicalAddress.h>
 #include <Kernel/VM/PhysicalPage.h>
 
-namespace Kernel {
-namespace ACPI {
+namespace Kernel::ACPI {
 
 class DynamicParser final
     : public IRQHandler
@@ -28,7 +27,7 @@ public:
     virtual void disable_aml_interpretation() override;
     virtual void try_acpi_shutdown() override;
     virtual bool can_shutdown() override { return true; }
-    virtual const char* purpose() const override { return "ACPI Parser"; }
+    virtual StringView purpose() const override { return "ACPI Parser"; }
 
 protected:
     explicit DynamicParser(PhysicalAddress rsdp);
@@ -40,5 +39,5 @@ private:
 
     OwnPtr<Region> m_acpi_namespace;
 };
-}
+
 }

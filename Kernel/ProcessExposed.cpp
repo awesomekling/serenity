@@ -26,7 +26,7 @@ static size_t s_allocate_inode_index()
     return s_next_inode_index.value();
 }
 
-InodeIndex ProcFSComponentsRegistrar::allocate_inode_index() const
+InodeIndex ProcFSComponentRegistry::allocate_inode_index() const
 {
     return s_allocate_inode_index();
 }
@@ -47,12 +47,12 @@ ProcFSExposedComponent::ProcFSExposedComponent(StringView name, InodeIndex preal
     m_name = KString::try_create(name);
 }
 
-ProcFSExposedFolder::ProcFSExposedFolder(StringView name)
+ProcFSExposedDirectory::ProcFSExposedDirectory(StringView name)
     : ProcFSExposedComponent(name)
 {
 }
 
-ProcFSExposedFolder::ProcFSExposedFolder(StringView name, const ProcFSExposedFolder& parent_folder)
+ProcFSExposedDirectory::ProcFSExposedDirectory(StringView name, const ProcFSExposedDirectory& parent_folder)
     : ProcFSExposedComponent(name)
     , m_parent_folder(parent_folder)
 {
@@ -220,17 +220,17 @@ NonnullRefPtr<Inode> ProcFSExposedComponent::to_inode(const ProcFS& procfs_insta
     return ProcFSInode::create(procfs_instance, *this);
 }
 
-NonnullRefPtr<Inode> ProcFSExposedFolder::to_inode(const ProcFS& procfs_instance) const
+NonnullRefPtr<Inode> ProcFSExposedDirectory::to_inode(const ProcFS& procfs_instance) const
 {
     return ProcFSDirectoryInode::create(procfs_instance, *this);
 }
 
-void ProcFSExposedFolder::add_component(const ProcFSExposedComponent&)
+void ProcFSExposedDirectory::add_component(const ProcFSExposedComponent&)
 {
     TODO();
 }
 
-RefPtr<ProcFSExposedComponent> ProcFSExposedFolder::lookup(StringView name)
+RefPtr<ProcFSExposedComponent> ProcFSExposedDirectory::lookup(StringView name)
 {
     for (auto& component : m_components) {
         if (component.name() == name) {
@@ -240,9 +240,9 @@ RefPtr<ProcFSExposedComponent> ProcFSExposedFolder::lookup(StringView name)
     return {};
 }
 
-KResult ProcFSExposedFolder::traverse_as_directory(unsigned fsid, Function<bool(const FS::DirectoryEntryView&)> callback) const
+KResult ProcFSExposedDirectory::traverse_as_directory(unsigned fsid, Function<bool(FileSystem::DirectoryEntryView const&)> callback) const
 {
-    Locker locker(ProcFSComponentsRegistrar::the().m_lock);
+    Locker locker(ProcFSComponentRegistry::the().get_lock());
     auto parent_folder = m_parent_folder.strong_ref();
     if (parent_folder.is_null())
         return KResult(EINVAL);

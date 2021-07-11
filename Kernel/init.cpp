@@ -143,12 +143,12 @@ extern "C" [[noreturn]] UNMAP_AFTER_INIT void init()
     ACPI::initialize();
 
     // Initialize the PCI Bus as early as possible, for early boot (PCI based) serial logging
-    SystemRegistrar::initialize();
-    ProcFSComponentsRegistrar::initialize();
+    SysFSComponentRegistry::initialize();
+    ProcFSComponentRegistry::initialize();
     PCI::initialize();
     PCISerialDevice::detect();
 
-    VFS::initialize();
+    VirtualFileSystem::initialize();
 
     dmesgln("Starting SerenityOS...");
 
@@ -236,8 +236,8 @@ void init_stage2(void*)
 
     USB::UHCIController::detect();
 
-    BIOSExposedFolder::initialize();
-    ACPI::ExposedFolder::initialize();
+    BIOSSysFSDirectory::initialize();
+    ACPI::ACPISysFSDirectory::initialize();
 
     VirtIO::detect();
 
@@ -252,11 +252,11 @@ void init_stage2(void*)
     SB16::detect();
 
     StorageManagement::initialize(kernel_command_line().root_device(), kernel_command_line().is_force_pio());
-    if (!VFS::the().mount_root(StorageManagement::the().root_filesystem())) {
-        PANIC("VFS::mount_root failed");
+    if (!VirtualFileSystem::the().mount_root(StorageManagement::the().root_filesystem())) {
+        PANIC("VirtualFileSystem::mount_root failed");
     }
 
-    Process::current()->set_root_directory(VFS::the().root_custody());
+    Process::current()->set_root_directory(VirtualFileSystem::the().root_custody());
 
     load_kernel_symbol_table();
 

@@ -9,31 +9,30 @@
 #include <AK/Types.h>
 #include <Kernel/ACPI/Definitions.h>
 #include <Kernel/ACPI/Initialize.h>
+#include <Kernel/FileSystem/SysFSComponent.h>
 #include <Kernel/PhysicalAddress.h>
-#include <Kernel/SystemExposed.h>
 #include <Kernel/VM/Region.h>
 #include <Kernel/VirtualAddress.h>
 
-namespace Kernel {
-namespace ACPI {
+namespace Kernel::ACPI {
 
-class ExposedFolder : public SystemExposedFolder {
+class ACPISysFSDirectory : public SysFSDirectory {
 public:
     static void initialize();
 
 private:
-    ExposedFolder();
+    ACPISysFSDirectory();
 };
 
-class ExposedComponent : public SystemExposedComponent {
+class ACPISysFSComponent : public SysFSComponent {
 public:
-    static NonnullRefPtr<ExposedComponent> create(String name, PhysicalAddress, size_t table_size);
+    static NonnullRefPtr<ACPISysFSComponent> create(String name, PhysicalAddress, size_t table_size);
 
     virtual KResultOr<size_t> read_bytes(off_t, size_t, UserOrKernelBuffer&, FileDescription*) const override;
 
 protected:
     OwnPtr<KBuffer> try_to_generate_buffer() const;
-    ExposedComponent(String name, PhysicalAddress, size_t table_size);
+    ACPISysFSComponent(String name, PhysicalAddress, size_t table_size);
 
     PhysicalAddress m_paddr;
     size_t m_length;
@@ -105,5 +104,4 @@ private:
     FADTFlags::x86_Specific_Flags m_x86_specific_flags;
 };
 
-}
 }

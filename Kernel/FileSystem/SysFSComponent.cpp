@@ -5,7 +5,7 @@
  */
 
 #include <Kernel/FileSystem/SysFS.h>
-#include <Kernel/SystemExposed.h>
+#include <Kernel/FileSystem/SysFSComponent.h>
 
 namespace Kernel {
 
@@ -20,15 +20,15 @@ static size_t allocate_inode_index()
     return s_next_inode_index.value();
 }
 
-SystemExposedComponent::SystemExposedComponent(StringView name)
+SysFSComponent::SysFSComponent(StringView name)
     : m_name(KString::try_create(name).release_nonnull())
     , m_component_index(allocate_inode_index())
 {
 }
 
-KResult SystemExposedFolder::traverse_as_directory(unsigned fsid, Function<bool(const FS::DirectoryEntryView&)> callback) const
+KResult SysFSDirectory::traverse_as_directory(unsigned fsid, Function<bool(FileSystem::DirectoryEntryView const&)> callback) const
 {
-    Locker locker(SystemRegistrar::the().m_lock);
+    Locker locker(SysFSComponentRegistry::the().get_lock());
     VERIFY(m_parent_folder);
     callback({ ".", { fsid, component_index() }, 0 });
     callback({ "..", { fsid, m_parent_folder->component_index() }, 0 });
@@ -40,7 +40,7 @@ KResult SystemExposedFolder::traverse_as_directory(unsigned fsid, Function<bool(
     return KSuccess;
 }
 
-RefPtr<SystemExposedComponent> SystemExposedFolder::lookup(StringView name)
+RefPtr<SysFSComponent> SysFSDirectory::lookup(StringView name)
 {
     for (auto& component : m_components) {
         if (component.name() == name) {
@@ -50,23 +50,23 @@ RefPtr<SystemExposedComponent> SystemExposedFolder::lookup(StringView name)
     return {};
 }
 
-SystemExposedFolder::SystemExposedFolder(String name)
-    : SystemExposedComponent(name)
+SysFSDirectory::SysFSDirectory(StringView name)
+    : SysFSComponent(name)
 {
 }
 
-SystemExposedFolder::SystemExposedFolder(String name, const SystemExposedFolder& parent_folder)
-    : SystemExposedComponent(name)
+SysFSDirectory::SysFSDirectory(StringView name, SysFSDirectory const& parent_folder)
+    : SysFSComponent(name)
     , m_parent_folder(parent_folder)
 {
 }
 
-NonnullRefPtr<Inode> SystemExposedFolder::to_inode(const SysFS& sysfs_instance) const
+NonnullRefPtr<Inode> SysFSDirectory::to_inode(SysFS const& sysfs_instance) const
 {
     return SysFSDirectoryInode::create(sysfs_instance, *this);
 }
 
-NonnullRefPtr<Inode> SystemExposedComponent::to_inode(const SysFS& sysfs_instance) const
+NonnullRefPtr<Inode> SysFSComponent::to_inode(SysFS const& sysfs_instance) const
 {
     return SysFSInode::create(sysfs_instance, *this);
 }
