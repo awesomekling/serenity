@@ -19,6 +19,7 @@ class WindowServerConnection final
     C_OBJECT(WindowServerConnection)
 public:
     static WindowServerConnection& the();
+    void set_parent(i32 client_id, i32 parent_id, i32 child_id) { async_set_parent(client_id, parent_id, child_id); }
     i32 expose_client_id() { return m_client_id; }
 
 private:

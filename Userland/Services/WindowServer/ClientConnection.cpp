@@ -1115,4 +1115,19 @@ void ClientConnection::set_flash_flush(bool enabled)
     Compositor::the().set_flash_flush(enabled);
 }
 
+void ClientConnection::set_parent(i32 client_id, i32 parent_id, i32 child_id)
+{
+    auto child_window = window_from_id(child_id);
+    VERIFY(child_window != nullptr);
+
+    auto client_connection = from_client_id(client_id);
+    VERIFY(client_connection != nullptr);
+
+    auto parent_window = client_connection->window_from_id(parent_id);
+    VERIFY(parent_window != nullptr);
+
+    child_window->set_parent_window(*parent_window);
+    child_window->set_rect(parent_window->rect());
+}
+
 }
