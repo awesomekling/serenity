@@ -7,21 +7,27 @@
 #include <LibCore/AnonymousBuffer.h>
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystemAccessClient/Client.h>
+#include <LibGUI/Application.h>
+#include <LibGUI/Window.h>
 
 namespace FileSystemAccessClient {
 
-void Client::open_file(Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> new_callback)
+void Client::open_file(i32 parent_window_id, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler)
 {
-    m_callback = move(new_callback);
+    m_callback = move(handler);
 
-    async_prompt_open_file(Core::StandardPaths::home_directory(), Core::OpenMode::ReadOnly);
+    auto window_server_client_id = GUI::Application::the()->expose_client_id();
+
+    async_prompt_open_file(window_server_client_id, parent_window_id, Core::StandardPaths::home_directory(), Core::OpenMode::ReadOnly);
 }
 
-void Client::save_file(String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> new_callback)
+void Client::save_file(i32 parent_window_id, String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler)
 {
-    m_callback = move(new_callback);
+    m_callback = move(handler);
 
-    async_prompt_save_file(name.is_null() ? "Untitled" : name, ext.is_null() ? "txt" : ext, Core::StandardPaths::home_directory(), Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
+    auto window_server_client_id = GUI::Application::the()->expose_client_id();
+
+    async_prompt_save_file(window_server_client_id, parent_window_id, name.is_null() ? "Untitled" : name, ext.is_null() ? "txt" : ext, Core::StandardPaths::home_directory(), Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
 }
 
 void Client::handle_prompt_end(i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file)

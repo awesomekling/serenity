@@ -22,9 +22,9 @@ public:
     {
     }
 
-    void open_file(Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> new_callback);
+    void open_file(i32 parent_window_id, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler);
 
-    void save_file(String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> new_callback);
+    void save_file(i32 parent_window_id, String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler);
 
 private:
     explicit Client()
