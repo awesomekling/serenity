@@ -285,4 +285,9 @@ void Application::event(Core::Event& event)
     Object::event(event);
 }
 
+i32 Application::expose_client_id()
+{
+    return GUI::WindowServerConnection::the().expose_client_id();
+}
+
 }

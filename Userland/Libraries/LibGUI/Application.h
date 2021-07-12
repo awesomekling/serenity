@@ -75,6 +75,8 @@ public:
     }
     void notify_drag_cancelled(Badge<WindowServerConnection>);
 
+    i32 expose_client_id();
+
     Function<void(Action&)> on_action_enter;
     Function<void(Action&)> on_action_leave;
 
