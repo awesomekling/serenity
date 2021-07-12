@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <typeinfo>
 #include <AK/Demangle.h>
 #include <LibGfx/FontDatabase.h>
 #include <LibGfx/Painter.h>
@@ -17,6 +16,7 @@
 #include <LibWeb/Layout/Node.h>
 #include <LibWeb/Layout/TextNode.h>
 #include <LibWeb/Page/BrowsingContext.h>
+#include <typeinfo>
 
 namespace Web::Layout {
 
