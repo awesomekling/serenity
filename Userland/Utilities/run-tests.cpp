@@ -322,9 +322,17 @@ int main(int argc, char** argv)
     if (config->num_groups() == 0)
         warnln("Empty configuration file ({}) loaded!", config_file.is_empty() ? "User config for Tests" : config_file.characters());
 
-    if (exclude_pattern.is_empty())
-        exclude_pattern = config->read_entry("Global", "NotTestsPattern", "$^"); // default is match nothing (aka match end then beginning)
-
+    if (exclude_pattern.is_empty()) {
+        StringBuilder builder;
+        builder.append(config->read_entry("Global", "NotTestsPattern", "$^")); // default is match nothing (aka match end then beginning)
+        for (auto regex : config->read_entry("Global", "SkipRegex", "$^").split_view(' ')) {
+            builder.append("|(");
+            builder.append(regex);
+            builder.append(')');
+        }
+        exclude_pattern = builder.to_string();
+        outln(exclude_pattern);
+    }
     Regex<PosixExtended> exclude_regex(exclude_pattern, {});
     if (exclude_regex.parser_result.error != Error::NoError) {
         warnln("Exclude pattern \"{}\" is invalid", exclude_pattern);
