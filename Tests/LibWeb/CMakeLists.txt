@@ -1,2 +1,13 @@
+set(
+    TEST_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/TestHTMLTokenizer.cpp
+)
+
+foreach(source ${TEST_SOURCES})
+    serenity_test(${source} LibWeb LIBS LibWeb)
+endforeach()
+
+# test-web does not use LibTest.
 serenity_testjs_test(test-web.cpp test-web LIBS LibWeb)
 install(TARGETS test-web RUNTIME DESTINATION bin OPTIONAL)
+install(FILES tokenizer-test.html DESTINATION usr/Tests/LibWeb)
