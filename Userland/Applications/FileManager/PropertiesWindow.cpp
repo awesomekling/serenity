@@ -24,7 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 
-PropertiesWindow::PropertiesWindow(const String& path, bool disable_rename, Window* parent_window)
+PropertiesWindow::PropertiesWindow(String const& path, bool disable_rename, Window* parent_window)
     : Window(parent_window)
 {
     auto lexical_path = LexicalPath(path);
@@ -167,7 +167,7 @@ void PropertiesWindow::permission_changed(mode_t mask, bool set)
     m_apply_button->set_enabled(m_name_dirty || m_permissions_dirty);
 }
 
-String PropertiesWindow::make_full_path(const String& name)
+String PropertiesWindow::make_full_path(String const& name)
 {
     return String::formatted("{}/{}", m_parent_path, name);
 }
@@ -242,7 +242,7 @@ void PropertiesWindow::make_permission_checkboxes(GUI::Widget& parent, Permissio
     box_execute.set_enabled(can_edit_checkboxes);
 }
 
-void PropertiesWindow::make_property_value_pairs(const Vector<PropertyValuePair>& pairs, GUI::Widget& parent)
+void PropertiesWindow::make_property_value_pairs(Vector<PropertyValuePair> const& pairs, GUI::Widget& parent)
 {
     int max_width = 0;
     Vector<NonnullRefPtr<GUI::Label>> property_labels;
