@@ -15,6 +15,7 @@ namespace FileSystemAccessClient {
 void Client::open_file(i32 parent_window_id, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler)
 {
     m_callback = move(handler);
+    m_pending_request = true;
 
     auto window_server_client_id = GUI::Application::the()->expose_client_id();
 
@@ -24,6 +25,7 @@ void Client::open_file(i32 parent_window_id, Function<void(i32, Optional<IPC::Fi
 void Client::save_file(i32 parent_window_id, String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler)
 {
     m_callback = move(handler);
+    m_pending_request = true;
 
     auto window_server_client_id = GUI::Application::the()->expose_client_id();
 
@@ -32,10 +34,18 @@ void Client::save_file(i32 parent_window_id, String const& name, String const ex
 
 void Client::handle_prompt_end(i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file)
 {
+    VERIFY(m_pending_request);
+    m_pending_request = false;
     m_callback(error, fd, chosen_file);
     m_callback = [](i32, Optional<IPC::File> const&, Optional<String> const&) {
         VERIFY_NOT_REACHED();
     };
+}
+
+void Client::die()
+{
+    if (m_pending_request)
+        handle_prompt_end(ECONNRESET, {}, "");
 }
 
 }

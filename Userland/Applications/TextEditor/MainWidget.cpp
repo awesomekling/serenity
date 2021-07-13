@@ -44,7 +44,6 @@
 namespace TextEditor {
 
 MainWidget::MainWidget()
-    : m_file_system_access_client(FileSystemAccessClient::Client::construct())
 {
     load_from_gml(text_editor_window_gml);
 
@@ -260,7 +259,7 @@ MainWidget::MainWidget()
     });
 
     m_open_action = GUI::CommonActions::make_open_action([this](auto&) {
-        m_file_system_access_client->open_file(window()->window_id(), [this](i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) {
+        ensure_file_system_access_client().open_file(window()->window_id(), [this](i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) {
             if (error != 0) {
                 if (error != -1)
                     GUI::MessageBox::show_error(window(), String::formatted("Opening \"{}\" failed: {}", chosen_file.value(), strerror(error)));
@@ -280,7 +279,7 @@ MainWidget::MainWidget()
     });
 
     m_save_as_action = GUI::CommonActions::make_save_as_action([&](auto&) {
-        m_file_system_access_client->save_file(window()->window_id(), m_name, m_extension, [this](i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) {
+        ensure_file_system_access_client().save_file(window()->window_id(), m_name, m_extension, [this](i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) {
             if (error != 0) {
                 if (error != -1)
                     GUI::MessageBox::show_error(window(), String::formatted("Saving \"{}\" failed: {}", chosen_file.value(), strerror(error)));
@@ -301,7 +300,7 @@ MainWidget::MainWidget()
 
     m_save_action = GUI::CommonActions::make_save_action([&](auto&) {
         if (!m_path.is_empty()) {
-            auto response = m_file_system_access_client->request_file(m_path, Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
+            auto response = ensure_file_system_access_client().request_file(m_path, Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
 
             if (response.error() != 0) {
                 if (response.error() != -1)
@@ -368,6 +367,13 @@ Web::OutOfProcessWebView& MainWidget::ensure_web_view()
         };
     }
     return *m_page_view;
+}
+
+FileSystemAccessClient::Client& MainWidget::ensure_file_system_access_client()
+{
+    if (!m_file_system_access_client || !m_file_system_access_client->is_open())
+        m_file_system_access_client = FileSystemAccessClient::Client::construct();
+    return *m_file_system_access_client;
 }
 
 void MainWidget::initialize_menubar(GUI::Menubar& menubar)
@@ -726,6 +732,10 @@ void MainWidget::drop_event(GUI::DropEvent& event)
             GUI::MessageBox::show(window(), "TextEditor can only open one file at a time!", "One at a time please!", GUI::MessageBox::Type::Error);
             return;
         }
+
+        if (!m_file_system_access_client || !m_file_system_access_client->is_open())
+            m_file_system_access_client = FileSystemAccessClient::Client::construct();
+
         auto file_response = m_file_system_access_client->request_file(urls.first().path(), Core::OpenMode::ReadOnly);
 
         if (file_response.error() != 0)

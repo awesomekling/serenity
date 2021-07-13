@@ -18,13 +18,12 @@ class Client final
     C_OBJECT(Client)
 
 public:
-    virtual void die() override
-    {
-    }
-
     void open_file(i32 parent_window_id, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler);
 
     void save_file(i32 parent_window_id, String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler);
+
+protected:
+    void die() override;
 
 private:
     explicit Client()
@@ -34,6 +33,7 @@ private:
 
     virtual void handle_prompt_end(i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) override;
 
+    bool m_pending_request { false };
     Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> m_callback;
 };
 
