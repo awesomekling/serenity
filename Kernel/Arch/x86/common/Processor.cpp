@@ -93,6 +93,8 @@ UNMAP_AFTER_INIT void Processor::cpu_detect()
         set_feature(CPUFeature::AVX);
     if (processor_info.ecx() & (1 << 30))
         set_feature(CPUFeature::RDRAND);
+    if (processor_info.ecx() & (1u << 31))
+        set_feature(CPUFeature::HYPERVISOR);
     if (processor_info.edx() & (1 << 11)) {
         u32 stepping = processor_info.eax() & 0xf;
         u32 model = (processor_info.eax() >> 4) & 0xf;
@@ -266,6 +268,8 @@ String Processor::features_string() const
             return "avx";
         case CPUFeature::LM:
             return "lm";
+        case CPUFeature::HYPERVISOR:
+            return "hypervisor";
             // no default statement here intentionally so that we get
             // a warning if a new feature is forgotten to be added here
         }
@@ -345,6 +349,9 @@ UNMAP_AFTER_INIT void Processor::initialize(u32 cpu)
         else
             asm volatile("fnsave %0"
                          : "=m"(s_clean_fpu_state));
+
+        if (has_feature(CPUFeature::HYPERVISOR))
+            detect_hypervisor();
     }
 
     m_info = new ProcessorInfo(*this);
@@ -354,6 +361,53 @@ UNMAP_AFTER_INIT void Processor::initialize(u32 cpu)
         VERIFY(cpu < s_processors.size());
         s_processors[cpu] = this;
     }
+}
+
+UNMAP_AFTER_INIT void Processor::detect_hypervisor()
+{
+    CPUID hypervisor_leaf_range(0x40000000);
+
+    // Get signature of hypervisor.
+    alignas(sizeof(u32)) char hypervisor_signature_buffer[13];
+    *reinterpret_cast<u32*>(hypervisor_signature_buffer) = hypervisor_leaf_range.ebx();
+    *reinterpret_cast<u32*>(hypervisor_signature_buffer + 4) = hypervisor_leaf_range.ecx();
+    *reinterpret_cast<u32*>(hypervisor_signature_buffer + 8) = hypervisor_leaf_range.edx();
+    hypervisor_signature_buffer[12] = '\0';
+    StringView hypervisor_signature(hypervisor_signature_buffer);
+
+    dmesgln("CPU[{}]: CPUID hypervisor signature '{}' ({:#x} {:#x} {:#x}), max leaf {:#x}", id(), hypervisor_signature, hypervisor_leaf_range.ebx(), hypervisor_leaf_range.ecx(), hypervisor_leaf_range.edx(), hypervisor_leaf_range.eax());
+
+    if (hypervisor_signature == "Microsoft Hv"sv)
+        detect_hypervisor_hyperv(hypervisor_leaf_range);
+}
+
+UNMAP_AFTER_INIT void Processor::detect_hypervisor_hyperv(CPUID const& hypervisor_leaf_range)
+{
+    if (hypervisor_leaf_range.eax() < 0x40000001)
+        return;
+
+    CPUID hypervisor_interface(0x40000001);
+
+    // Get signature of hypervisor interface.
+    alignas(sizeof(u32)) char interface_signature_buffer[5];
+    *reinterpret_cast<u32*>(interface_signature_buffer) = hypervisor_interface.eax();
+    interface_signature_buffer[4] = '\0';
+    StringView hyperv_interface_signature(interface_signature_buffer);
+
+    dmesgln("CPU[{}]: Hyper-V interface signature '{}' ({:#x})", id(), hyperv_interface_signature, hypervisor_interface.eax());
+
+    if (hypervisor_leaf_range.eax() < 0x40000001)
+        return;
+
+    CPUID hypervisor_sysid(0x40000002);
+    dmesgln("CPU[{}]: Hyper-V system identity {}.{}, build number {}", id(), hypervisor_sysid.ebx() >> 16, hypervisor_sysid.ebx() & 0xFFFF, hypervisor_sysid.eax());
+
+    if (hypervisor_leaf_range.eax() < 0x40000005 || hyperv_interface_signature != "Hv#1"sv)
+        return;
+
+    dmesgln("CPU[{}]: Hyper-V hypervisor detected", id());
+
+    // TODO: Actually do something with Hyper-V.
 }
 
 void Processor::write_raw_gdt_entry(u16 selector, u32 low, u32 high)
