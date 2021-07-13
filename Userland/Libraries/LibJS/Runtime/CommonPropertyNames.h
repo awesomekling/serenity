@@ -17,6 +17,7 @@ namespace JS {
     P(__defineSetter__)                      \
     P(__lookupGetter__)                      \
     P(__lookupSetter__)                      \
+    P(Atomics)                               \
     P(BYTES_PER_ELEMENT)                     \
     P(BigInt)                                \
     P(Boolean)                               \
@@ -223,6 +224,7 @@ namespace JS {
     P(lastIndexOf)                           \
     P(length)                                \
     P(link)                                  \
+    P(load)                                  \
     P(log)                                   \
     P(log1p)                                 \
     P(log2)                                  \
@@ -304,6 +306,7 @@ namespace JS {
     P(sqrt)                                  \
     P(startsWith)                            \
     P(sticky)                                \
+    P(store)                                 \
     P(strike)                                \
     P(stringify)                             \
     P(sub)                                   \
@@ -349,12 +352,15 @@ namespace JS {
     P(writable)
 
 struct CommonPropertyNames {
+    PropertyName and_ { "and", PropertyName::StringMayBeNumber::No };
     PropertyName catch_ { "catch", PropertyName::StringMayBeNumber::No };
     PropertyName delete_ { "delete", PropertyName::StringMayBeNumber::No };
     PropertyName for_ { "for", PropertyName::StringMayBeNumber::No };
+    PropertyName or_ { "or", PropertyName::StringMayBeNumber::No };
     PropertyName register_ { "register", PropertyName::StringMayBeNumber::No };
     PropertyName return_ { "return", PropertyName::StringMayBeNumber::No };
     PropertyName throw_ { "throw", PropertyName::StringMayBeNumber::No };
+    PropertyName xor_ { "xor", PropertyName::StringMayBeNumber::No };
 #define __ENUMERATE(x) PropertyName x { #x, PropertyName::StringMayBeNumber::No };
     ENUMERATE_STANDARD_PROPERTY_NAMES(__ENUMERATE)
 #undef __ENUMERATE
