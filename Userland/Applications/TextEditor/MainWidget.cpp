@@ -44,7 +44,6 @@
 namespace TextEditor {
 
 MainWidget::MainWidget()
-    : m_file_system_access_client(FileSystemAccessClient::construct())
 {
     load_from_gml(text_editor_window_gml);
 
@@ -260,48 +259,48 @@ MainWidget::MainWidget()
     });
 
     m_open_action = GUI::CommonActions::make_open_action([this](auto&) {
-        auto fd_response = m_file_system_access_client->prompt_open_file(Core::StandardPaths::home_directory(), Core::OpenMode::ReadOnly);
-
-        if (fd_response.error() != 0) {
-            if (fd_response.error() != -1)
-                GUI::MessageBox::show_error(window(), String::formatted("Opening \"{}\" failed: {}", fd_response.chosen_file().value(), strerror(fd_response.error())));
-            return;
-        }
-
-        if (editor().document().is_modified()) {
-            auto save_document_first_result = GUI::MessageBox::show(window(), "Save changes to current document first?", "Warning", GUI::MessageBox::Type::Warning, GUI::MessageBox::InputType::YesNoCancel);
-            if (save_document_first_result == GUI::Dialog::ExecResult::ExecYes)
-                m_save_action->activate();
-            if (save_document_first_result != GUI::Dialog::ExecResult::ExecNo && editor().document().is_modified())
+        FileSystemAccessClient::Client::the().open_file(window()->window_id(), [this](i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) {
+            if (error != 0) {
+                if (error != -1)
+                    GUI::MessageBox::show_error(window(), String::formatted("Opening \"{}\" failed: {}", chosen_file.value(), strerror(error)));
                 return;
-        }
+            }
 
-        read_file_and_close(fd_response.fd()->take_fd(), fd_response.chosen_file().value());
+            if (editor().document().is_modified()) {
+                auto save_document_first_result = GUI::MessageBox::show(window(), "Save changes to current document first?", "Warning", GUI::MessageBox::Type::Warning, GUI::MessageBox::InputType::YesNoCancel);
+                if (save_document_first_result == GUI::Dialog::ExecResult::ExecYes)
+                    m_save_action->activate();
+                if (save_document_first_result != GUI::Dialog::ExecResult::ExecNo && editor().document().is_modified())
+                    return;
+            }
+
+            read_file_and_close(fd->take_fd(), chosen_file.value());
+        });
     });
 
     m_save_as_action = GUI::CommonActions::make_save_as_action([&](auto&) {
-        auto response = m_file_system_access_client->prompt_save_file(m_name.is_null() ? "Untitled" : m_name, m_extension.is_null() ? "txt" : m_extension, Core::StandardPaths::home_directory(), Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
+        FileSystemAccessClient::Client::the().save_file(window()->window_id(), m_name, m_extension, [this](i32 error, Optional<IPC::File> const& fd, Optional<String> const& chosen_file) {
+            if (error != 0) {
+                if (error != -1)
+                    GUI::MessageBox::show_error(window(), String::formatted("Saving \"{}\" failed: {}", chosen_file.value(), strerror(error)));
+                return;
+            }
 
-        if (response.error() != 0) {
-            if (response.error() != -1)
-                GUI::MessageBox::show_error(window(), String::formatted("Saving \"{}\" failed: {}", response.chosen_file().value(), strerror(response.error())));
-            return;
-        }
+            if (!m_editor->write_to_file_and_close(fd->take_fd())) {
+                GUI::MessageBox::show(window(), "Unable to save file.\n", "Error", GUI::MessageBox::Type::Error);
+                return;
+            }
+            // FIXME: It would be cool if this would propagate from GUI::TextDocument somehow.
+            window()->set_modified(false);
 
-        if (!m_editor->write_to_file_and_close(response.fd()->take_fd())) {
-            GUI::MessageBox::show(window(), "Unable to save file.\n", "Error", GUI::MessageBox::Type::Error);
-            return;
-        }
-        // FIXME: It would be cool if this would propagate from GUI::TextDocument somehow.
-        window()->set_modified(false);
-
-        set_path(response.chosen_file().value());
-        dbgln("Wrote document to {}", response.chosen_file().value());
+            set_path(chosen_file.value());
+            dbgln("Wrote document to {}", chosen_file.value());
+        });
     });
 
     m_save_action = GUI::CommonActions::make_save_action([&](auto&) {
         if (!m_path.is_empty()) {
-            auto response = m_file_system_access_client->request_file(m_path, Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
+            auto response = FileSystemAccessClient::Client::the().request_file(m_path, Core::OpenMode::Truncate | Core::OpenMode::WriteOnly);
 
             if (response.error() != 0) {
                 if (response.error() != -1)
@@ -726,7 +725,9 @@ void MainWidget::drop_event(GUI::DropEvent& event)
             GUI::MessageBox::show(window(), "TextEditor can only open one file at a time!", "One at a time please!", GUI::MessageBox::Type::Error);
             return;
         }
-        auto file_response = m_file_system_access_client->request_file(urls.first().path(), Core::OpenMode::ReadOnly);
+
+        // TODO: A drop event should be considered user consent for opening a file
+        auto file_response = FileSystemAccessClient::Client::the().request_file(urls.first().path(), Core::OpenMode::ReadOnly);
 
         if (file_response.error() != 0)
             return;

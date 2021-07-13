@@ -19,11 +19,13 @@ class WindowServerConnection final
     C_OBJECT(WindowServerConnection)
 public:
     static WindowServerConnection& the();
+    void set_parent(i32 client_id, i32 parent_id, i32 child_id) { async_set_parent(client_id, parent_id, child_id); }
+    i32 expose_client_id() { return m_client_id; }
 
 private:
     WindowServerConnection();
 
-    virtual void fast_greet(Vector<Gfx::IntRect> const&, u32, u32, u32, Core::AnonymousBuffer const&, String const&, String const&) override;
+    virtual void fast_greet(Vector<Gfx::IntRect> const&, u32, u32, u32, Core::AnonymousBuffer const&, String const&, String const&, i32) override;
     virtual void paint(i32, Gfx::IntSize const&, Vector<Gfx::IntRect> const&) override;
     virtual void mouse_move(i32, Gfx::IntPoint const&, u32, u32, u32, i32, bool, Vector<String> const&) override;
     virtual void mouse_down(i32, Gfx::IntPoint const&, u32, u32, u32, i32) override;
@@ -56,6 +58,7 @@ private:
     virtual void ping() override;
 
     bool m_display_link_notification_pending { false };
+    i32 m_client_id;
 };
 
 }

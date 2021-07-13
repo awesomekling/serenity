@@ -54,7 +54,7 @@ ClientConnection::ClientConnection(NonnullRefPtr<Core::LocalSocket> client_socke
     s_connections->set(client_id, *this);
 
     auto& wm = WindowManager::the();
-    async_fast_greet(Screen::rects(), Screen::main().index(), wm.window_stack_rows(), wm.window_stack_columns(), Gfx::current_system_theme_buffer(), Gfx::FontDatabase::default_font_query(), Gfx::FontDatabase::fixed_width_font_query());
+    async_fast_greet(Screen::rects(), Screen::main().index(), wm.window_stack_rows(), wm.window_stack_columns(), Gfx::current_system_theme_buffer(), Gfx::FontDatabase::default_font_query(), Gfx::FontDatabase::fixed_width_font_query(), client_id);
 }
 
 ClientConnection::~ClientConnection()
@@ -1113,6 +1113,21 @@ void ClientConnection::set_window_modified(i32 window_id, bool modified)
 void ClientConnection::set_flash_flush(bool enabled)
 {
     Compositor::the().set_flash_flush(enabled);
+}
+
+void ClientConnection::set_parent(i32 client_id, i32 parent_id, i32 child_id)
+{
+    auto child_window = window_from_id(child_id);
+    VERIFY(child_window != nullptr);
+
+    auto client_connection = from_client_id(client_id);
+    VERIFY(client_connection != nullptr);
+
+    auto parent_window = client_connection->window_from_id(parent_id);
+    VERIFY(parent_window != nullptr);
+
+    child_window->set_parent_window(*parent_window);
+    child_window->set_rect(parent_window->rect());
 }
 
 }

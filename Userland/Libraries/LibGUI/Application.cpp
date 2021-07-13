@@ -285,4 +285,14 @@ void Application::event(Core::Event& event)
     Object::event(event);
 }
 
+void Application::set_parent(i32 window_server_client_id, i32 window_parent_id, i32 window_child_id)
+{
+    GUI::WindowServerConnection::the().set_parent(window_server_client_id, window_parent_id, window_child_id);
+}
+
+i32 Application::expose_client_id()
+{
+    return GUI::WindowServerConnection::the().expose_client_id();
+}
+
 }
