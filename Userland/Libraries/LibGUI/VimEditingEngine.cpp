@@ -834,10 +834,10 @@ bool VimEditingEngine::on_key_in_normal_mode(const KeyEvent& event)
             delete_line();
             if (was_second_last_line || (m_editor->cursor().line() != 0 && m_editor->cursor().line() != m_editor->line_count() - 1)) {
                 move_one_up(event);
-                move_to_line_end();
+                move_to_logical_line_end();
                 m_editor->add_code_point(0x0A);
             } else if (m_editor->cursor().line() == 0) {
-                move_to_line_beginning();
+                move_to_logical_line_beginning();
                 m_editor->add_code_point(0x0A);
                 move_one_up(event);
             } else if (m_editor->cursor().line() == m_editor->line_count() - 1) {
@@ -896,15 +896,15 @@ bool VimEditingEngine::on_key_in_normal_mode(const KeyEvent& event)
         if (event.shift() && !event.ctrl() && !event.alt()) {
             switch (event.key()) {
             case (KeyCode::Key_A):
-                move_to_line_end();
+                move_to_logical_line_end();
                 switch_to_insert_mode();
                 return true;
             case (KeyCode::Key_I):
-                move_to_line_beginning();
+                move_to_logical_line_beginning();
                 switch_to_insert_mode();
                 return true;
             case (KeyCode::Key_O):
-                move_to_line_beginning();
+                move_to_logical_line_beginning();
                 m_editor->add_code_point(0x0A);
                 move_one_up(event);
                 switch_to_insert_mode();
@@ -916,6 +916,18 @@ bool VimEditingEngine::on_key_in_normal_mode(const KeyEvent& event)
             case (KeyCode::Key_RightBrace):
                 move_to_next_empty_lines_block();
                 return true;
+            case (KeyCode::Key_J): {
+                if (m_editor->cursor().line() + 1 >= m_editor->line_count())
+                    return true;
+                move_to_logical_line_end();
+                m_editor->add_code_point(' ');
+                TextPosition next_line = { m_editor->cursor().line() + 1, 0 };
+                m_editor->delete_text_range({ m_editor->cursor(), next_line });
+                move_one_left();
+                return true;
+            }
+            case (KeyCode::Key_P):
+                put_before();
             default:
                 break;
             }
@@ -958,7 +970,7 @@ bool VimEditingEngine::on_key_in_normal_mode(const KeyEvent& event)
                 switch_to_insert_mode();
                 return true;
             case (KeyCode::Key_O):
-                move_to_line_end();
+                move_to_logical_line_end();
                 m_editor->add_code_point(0x0A);
                 switch_to_insert_mode();
                 return true;
@@ -976,7 +988,7 @@ bool VimEditingEngine::on_key_in_normal_mode(const KeyEvent& event)
                 m_previous_key = event.key();
                 return true;
             case (KeyCode::Key_P):
-                put();
+                put_after();
                 return true;
             case (KeyCode::Key_PageUp):
                 move_page_up();
@@ -1043,11 +1055,11 @@ bool VimEditingEngine::on_key_in_visual_mode(const KeyEvent& event)
     if (event.shift() && !event.ctrl() && !event.alt()) {
         switch (event.key()) {
         case (KeyCode::Key_A):
-            move_to_line_end();
+            move_to_logical_line_end();
             switch_to_insert_mode();
             return true;
         case (KeyCode::Key_I):
-            move_to_line_beginning();
+            move_to_logical_line_beginning();
             switch_to_insert_mode();
             return true;
         default:
@@ -1227,10 +1239,25 @@ void VimEditingEngine::yank(TextRange range)
     m_yank_buffer = m_editor->document().text_in_range(range);
 }
 
-void VimEditingEngine::put()
+void VimEditingEngine::put_before()
 {
     if (m_yank_type == YankType::Line) {
-        move_to_line_end();
+        move_to_logical_line_beginning();
+        StringBuilder sb = StringBuilder(m_yank_buffer.length() + 1);
+        sb.append(m_yank_buffer);
+        sb.append_code_point(0x0A);
+        m_editor->insert_at_cursor_or_replace_selection(sb.to_string());
+        m_editor->set_cursor({ m_editor->cursor().line(), m_editor->current_line().first_non_whitespace_column() });
+    } else {
+        m_editor->insert_at_cursor_or_replace_selection(m_yank_buffer);
+        move_one_left();
+    }
+}
+
+void VimEditingEngine::put_after()
+{
+    if (m_yank_type == YankType::Line) {
+        move_to_logical_line_end();
         StringBuilder sb = StringBuilder(m_yank_buffer.length() + 1);
         sb.append_code_point(0x0A);
         sb.append(m_yank_buffer);
