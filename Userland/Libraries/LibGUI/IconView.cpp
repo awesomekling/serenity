@@ -246,9 +246,9 @@ void IconView::mouseup_event(MouseEvent& event)
     AbstractView::mouseup_event(event);
 }
 
-bool IconView::update_rubber_banding(const Gfx::IntPoint& position)
+bool IconView::update_rubber_banding(const Gfx::IntPoint& input_position)
 {
-    auto adjusted_position = to_content_position(position);
+    auto adjusted_position = to_content_position(widget_inner_rect().clamp(input_position));
     if (m_rubber_band_current != adjusted_position) {
         auto prev_rect = Gfx::IntRect::from_two_points(m_rubber_band_origin, m_rubber_band_current);
         auto prev_rubber_band_fill_rect = prev_rect.shrunken(1, 1);
