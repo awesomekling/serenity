@@ -52,11 +52,7 @@ private:
     Web::OutOfProcessWebView& ensure_web_view();
     void set_web_view_visible(bool);
 
-    FileSystemAccessClient::Client& ensure_file_system_access_client();
-
     virtual void drop_event(GUI::DropEvent&) override;
-
-    RefPtr<FileSystemAccessClient::Client> m_file_system_access_client;
 
     RefPtr<GUI::TextEditor> m_editor;
     String m_path;

@@ -22,6 +22,7 @@ public:
 
     void save_file(i32 parent_window_id, String const& name, String const ext, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler);
 
+    static Client& the();
 protected:
     void die() override;
 

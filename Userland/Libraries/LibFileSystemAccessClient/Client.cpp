@@ -12,6 +12,15 @@
 
 namespace FileSystemAccessClient {
 
+static RefPtr<Client> s_the = nullptr;
+
+Client& Client::the()
+{
+    if (!s_the || !s_the->is_open())
+        s_the = Client::construct();
+    return *s_the;
+}
+
 void Client::open_file(i32 parent_window_id, Function<void(i32, Optional<IPC::File> const&, Optional<String> const&)> handler)
 {
     m_callback = move(handler);
@@ -46,6 +55,8 @@ void Client::die()
 {
     if (m_pending_request)
         handle_prompt_end(ECONNRESET, {}, "");
+
+    s_the = nullptr;
 }
 
 }
