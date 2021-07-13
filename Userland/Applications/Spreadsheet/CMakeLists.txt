@@ -45,5 +45,7 @@ target_link_libraries(Spreadsheet LibGUI LibJS LibWeb)
 
 serenity_test(Writers/Test/TestXSVWriter.cpp Spreadsheet)
 
-serenity_test(Readers/Test/TestXSV.cpp Spreadsheet)
-target_sources(TestXSV PRIVATE Readers/XSV.cpp)
+if (NOT USE_CLANG_TOOLCHAIN)
+    serenity_test(Readers/Test/TestXSV.cpp Spreadsheet)
+    target_sources(TestXSV PRIVATE Readers/XSV.cpp)
+endif()

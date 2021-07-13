@@ -40,8 +40,18 @@ else
     $CP -PdR "$SERENITY_SOURCE_DIR"/Base/* mnt/
     $CP -PdR Root/* mnt/
 fi
+
 SERENITY_ARCH="${SERENITY_ARCH:-i686}"
-$CP "$SERENITY_SOURCE_DIR"/Toolchain/Local/"$SERENITY_ARCH"/"$SERENITY_ARCH"-pc-serenity/lib/libgcc_s.so mnt/usr/lib/
+if [ "$USE_CLANG_TOOLCHAIN" ]; then
+    CLANG_ARCH=
+    [ "$SERENITY_ARCH" -eq "i686" ] && CLANG_ARCH="i386" || CLANG_ARCH="$SERENITY_ARCH"
+    $CP "$SERENITY_SOURCE_DIR"/Toolchain/Local/clang/"$SERENITY_ARCH"/lib/libunwind.so.1 mnt/usr/lib
+    $CP "$SERENITY_SOURCE_DIR"/Toolchain/Local/clang/"$SERENITY_ARCH"/lib/libc++.so.1 mnt/usr/lib
+    $CP "$SERENITY_SOURCE_DIR"/Toolchain/Local/clang/"$SERENITY_ARCH"/lib/libc++abi.so.1 mnt/usr/lib
+else
+    $CP "$SERENITY_SOURCE_DIR"/Toolchain/Local/"$SERENITY_ARCH"/"$SERENITY_ARCH"-pc-serenity/lib/libgcc_s.so mnt/usr/lib/
+fi
+
 # If umask was 027 or similar when the repo was cloned,
 # file permissions in Base/ are too restrictive. Restore
 # the permissions needed in the image.
